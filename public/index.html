@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rank Shifters - Website Marketplace</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: { colors: { brand: { DEFAULT: '#16a34a', dark: '#15803d', light: '#22c55e' } } } }
+  }
+</script>
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
   .star { color: #f59e0b; }
-  .btn-primary { background-color:#16a34a; color:#fff; }
-  .btn-primary:hover { background-color:#15803d; }
-  .text-primary { color:#16a34a; }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -20,12 +22,12 @@
 <header class="bg-white border-b sticky top-0 z-30">
   <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <div class="w-8 h-8 rounded text-white grid place-items-center font-bold" style="background-color:#16a34a;">R</div>
+      <div class="w-8 h-8 rounded bg-brand text-white grid place-items-center font-bold">R</div>
       <h1 class="text-lg font-semibold">Rank Shifters</h1>
     </div>
     <div class="flex items-center gap-3">
       <button id="cartBtn" class="relative px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">
-        Cart <span id="cartCount" class="ml-1 inline-block min-w-[20px] text-center text-xs text-white rounded-full px-1.5" style="background-color:#16a34a;">0</span>
+        Cart <span id="cartCount" class="ml-1 inline-block min-w-[20px] text-center text-xs bg-brand text-white rounded-full px-1.5">0</span>
       </button>
       <div id="userArea"></div>
     </div>
@@ -62,7 +64,7 @@
 
   <!-- Admin actions -->
   <div id="adminBar" class="hidden mb-4 flex flex-wrap gap-2">
-    <button id="addBtn" class="px-3 py-2 text-sm btn-primary rounded-lg">+ Add Website</button>
+    <button id="addBtn" class="px-3 py-2 text-sm bg-brand hover:bg-brand-dark text-white rounded-lg">+ Add Website</button>
     <button id="importBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Import CSV</button>
     <button id="exportBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Export CSV</button>
     <button id="bulkDeleteBtn" class="hidden px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Selected (<span id="selCount">0</span>)</button>
@@ -93,30 +95,28 @@
       </table>
     </div>
     <div id="empty" class="hidden p-8 text-center text-slate-500">No results.</div>
+
     <!-- Pagination -->
-    <div class="p-3 border-t flex flex-col md:flex-row gap-3 items-center justify-between text-sm">
-      <div class="flex items-center gap-2">
-        <span id="resultCount" class="text-slate-500">0 results</span>
-        <span class="text-slate-300">·</span>
-        <label class="text-slate-500">Per page:
-          <select id="pageSize" class="border rounded px-2 py-1 ml-1 text-slate-700">
-            <option value="25">25</option>
-            <option value="50" selected>50</option>
-            <option value="100">100</option>
-            <option value="250">250</option>
-            <option value="500">500</option>
-          </select>
-        </label>
+    <div class="border-t p-3 flex flex-wrap gap-3 items-center justify-between text-sm">
+      <div class="text-slate-500">
+        <span id="resultCount">0 results</span>
+        <span id="resultTotal" class="hidden md:inline ml-2 text-slate-400"></span>
       </div>
       <div class="flex items-center gap-2">
-        <button id="firstPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">«</button>
-        <button id="prevPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">‹ Prev</button>
-        <span id="pageInfo" class="px-2 text-slate-600">Page 1 of 1</span>
-        <button id="nextPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">Next ›</button>
-        <button id="lastPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">»</button>
-        <span class="text-slate-400">·</span>
-        <span class="text-slate-500">Go to:</span>
-        <input id="gotoPage" type="number" min="1" class="border rounded px-2 py-1 w-16" />
+        <label class="text-slate-500">Per page:</label>
+        <select id="pageSize" class="border rounded-lg px-2 py-1 text-sm">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+          <option value="500">500</option>
+        </select>
+        <button id="firstBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">«</button>
+        <button id="prevBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">‹</button>
+        <span id="pageInfo" class="text-slate-600 mx-2">Page 1 / 1</span>
+        <input id="pageJump" type="number" min="1" placeholder="Go to" class="w-16 border rounded px-2 py-1 text-sm" />
+        <button id="nextBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">›</button>
+        <button id="lastBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">»</button>
       </div>
     </div>
   </div>
@@ -147,14 +147,14 @@
   <div class="absolute inset-0 bg-black/50" data-close></div>
   <div class="relative bg-white rounded-xl w-full max-w-sm p-5 shadow-xl">
     <div class="flex gap-2 mb-4">
-      <button class="authTab flex-1 py-1.5 rounded-lg btn-primary text-sm" data-tab="login">Login</button>
+      <button class="authTab flex-1 py-1.5 rounded-lg bg-brand text-white text-sm" data-tab="login">Login</button>
       <button class="authTab flex-1 py-1.5 rounded-lg bg-slate-100 text-sm" data-tab="register">Register</button>
     </div>
     <form id="authForm" class="space-y-3">
       <input id="authUser" placeholder="Username" class="w-full border rounded-lg px-3 py-2" required autocomplete="username" />
       <input id="authPass" type="password" placeholder="Password" class="w-full border rounded-lg px-3 py-2" required autocomplete="current-password" />
       <div id="authErr" class="text-sm text-red-600 hidden"></div>
-      <button class="w-full py-2 rounded-lg btn-primary" type="submit">
+      <button class="w-full py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit">
         <span id="authSubmitText">Login</span>
       </button>
     </form>
@@ -181,7 +181,7 @@
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="f_featured" /> Featured (pin to top)</label>
       <div class="flex gap-2 justify-end">
         <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
-        <button class="px-4 py-2 rounded-lg btn-primary" type="submit">Save</button>
+        <button class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit">Save</button>
       </div>
     </form>
   </div>
@@ -197,10 +197,10 @@
     <textarea id="csvText" placeholder="...or paste CSV here" class="w-full border rounded-lg p-2 text-sm h-32 font-mono"></textarea>
     <label class="flex items-center gap-2 text-sm mt-3"><input type="checkbox" id="replaceMode" /> Replace all existing websites</label>
     <div class="flex justify-between items-center mt-4">
-      <a href="#" id="downloadTemplate" class="text-sm text-primary hover:underline">Download template</a>
+      <a href="#" id="downloadTemplate" class="text-sm text-brand hover:underline">Download template</a>
       <div class="flex gap-2">
         <button data-close class="px-3 py-2 rounded-lg border">Cancel</button>
-        <button id="doImport" class="px-4 py-2 rounded-lg btn-primary">Import</button>
+        <button id="doImport" class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white">Import</button>
       </div>
     </div>
     <div id="importMsg" class="text-sm mt-3"></div>
@@ -275,17 +275,17 @@ function renderUserArea() {
       $('#selectAllTh').classList.add('hidden');
     };
   } else {
-    el.innerHTML = `<button id="loginBtn" class="px-3 py-1.5 text-sm rounded-lg btn-primary">Login / Register</button>`;
+    el.innerHTML = `<button id="loginBtn" class="px-3 py-1.5 text-sm rounded-lg bg-brand text-white hover:bg-brand-dark">Login / Register</button>`;
     $('#loginBtn').onclick = () => openAuth();
   }
   const isAdmin = state.user && state.user.role === 'admin';
   $('#adminBar').classList.toggle('hidden', !isAdmin);
   $('#statsBar').classList.toggle('hidden', !isAdmin);
   $('#selectAllTh').classList.toggle('hidden', !isAdmin);
+  if (isAdmin) loadStats();
 }
 
 async function loadStats() {
-  if (!state.user || state.user.role !== 'admin') return;
   try {
     const s = await api('/api/stats');
     $('#sTotal').textContent = s.total;
@@ -306,7 +306,6 @@ async function loadWebsites() {
   sel.value = cur;
   state.page = 1;
   renderRows();
-  loadStats();
 }
 
 function filtered() {
@@ -315,7 +314,7 @@ function filtered() {
   const min = parseFloat($('#minPrice').value);
   const max = parseFloat($('#maxPrice').value);
   let rows = state.websites.filter(w => {
-    if (q && !(w.website.toLowerCase().includes(q) || (w.notes||'').toLowerCase().includes(q))) return false;
+    if (q && !((w.website||'').toLowerCase().includes(q) || (w.notes||'').toLowerCase().includes(q))) return false;
     if (cat && w.category !== cat) return false;
     if (!isNaN(min) && w.price < min) return false;
     if (!isNaN(max) && w.price > max) return false;
@@ -342,27 +341,32 @@ function whatsappLinkSingle(w) {
 
 function renderRows() {
   const all = filtered();
-  const isAdmin = state.user && state.user.role === 'admin';
-  const totalPages = Math.max(1, Math.ceil(all.length / state.pageSize));
+  const total = all.length;
+  const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
   if (state.page > totalPages) state.page = totalPages;
   if (state.page < 1) state.page = 1;
   const start = (state.page - 1) * state.pageSize;
-  const rows = all.slice(start, start + state.pageSize);
+  const end = start + state.pageSize;
+  const rows = all.slice(start, end);
+  const isAdmin = state.user && state.user.role === 'admin';
+  $('#empty').classList.toggle('hidden', rows.length > 0);
 
-  $('#empty').classList.toggle('hidden', all.length > 0);
-  const totalShown = all.length;
-  const fromIdx = totalShown ? start + 1 : 0;
-  const toIdx = Math.min(start + state.pageSize, totalShown);
-  $('#resultCount').textContent = totalShown
-    ? `Showing ${fromIdx}-${toIdx} of ${fmtNum(totalShown)} (total ${fmtNum(state.websites.length)})`
-    : '0 results';
-  $('#pageInfo').textContent = `Page ${state.page} of ${totalPages}`;
-  $('#prevPage').disabled = state.page <= 1;
-  $('#firstPage').disabled = state.page <= 1;
-  $('#nextPage').disabled = state.page >= totalPages;
-  $('#lastPage').disabled = state.page >= totalPages;
-  $('#gotoPage').max = totalPages;
-  $('#gotoPage').placeholder = String(state.page);
+  // Result counts and pagination labels
+  $('#resultCount').textContent = total === 0
+    ? '0 results'
+    : `Showing ${(start + 1).toLocaleString()}–${Math.min(end, total).toLocaleString()} of ${total.toLocaleString()}`;
+  if (isAdmin) {
+    const sumP = all.reduce((s,w) => s + (w.price||0), 0);
+    $('#resultTotal').textContent = `Filtered value: ${fmtMoney(sumP)}`;
+    $('#resultTotal').classList.remove('hidden');
+  } else {
+    $('#resultTotal').classList.add('hidden');
+  }
+  $('#pageInfo').textContent = `Page ${state.page} / ${totalPages}`;
+  $('#prevBtn').disabled = state.page <= 1;
+  $('#firstBtn').disabled = state.page <= 1;
+  $('#nextBtn').disabled = state.page >= totalPages;
+  $('#lastBtn').disabled = state.page >= totalPages;
 
   $('#rows').innerHTML = rows.map(w => {
     const inCart = state.cart.some(c => c.id === w.id);
@@ -372,7 +376,7 @@ function renderRows() {
         ${isAdmin ? `<td class="text-center px-3 py-3"><input type="checkbox" class="rowSel" data-id="${w.id}" ${sel}/></td>` : ''}
         <td class="px-4 py-3 font-medium">
           ${w.featured ? '<span class="star mr-1" title="Featured">★</span>' : ''}
-          <a href="https://${w.website.replace(/^https?:\/\//,'')}" target="_blank" class="text-primary hover:underline">${w.website}</a>
+          <a href="https://${(w.website||'').replace(/^https?:\/\//,'')}" target="_blank" class="text-brand hover:underline">${w.website}</a>
         </td>
         <td class="px-4 py-3"><span class="badge bg-slate-100 text-slate-700">${w.category || '-'}</span></td>
         <td class="px-4 py-3 text-right font-semibold">${fmtMoney(w.price)}</td>
@@ -382,10 +386,10 @@ function renderRows() {
         <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${(w.notes||'').replace(/"/g,'&quot;')}">${w.notes || ''}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${isAdmin
-            ? `<button class="text-primary hover:underline text-xs mr-2" onclick="editRow(${w.id})">Edit</button>
+            ? `<button class="text-brand hover:underline text-xs mr-2" onclick="editRow(${w.id})">Edit</button>
                <button class="text-red-600 hover:underline text-xs" onclick="deleteRow(${w.id})">Delete</button>`
             : `<a href="${whatsappLinkSingle(w)}" target="_blank" class="inline-block px-2 py-1 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 mr-1">WhatsApp</a>
-               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart ? 'bg-slate-200 text-slate-600' : 'btn-primary'}" onclick="toggleCart(${w.id})">${inCart ? 'In cart' : '+ Add'}</button>`
+               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart ? 'bg-slate-200 text-slate-600' : 'bg-brand text-white hover:bg-brand-dark'}" onclick="toggleCart(${w.id})">${inCart ? 'In cart' : '+ Add'}</button>`
           }
         </td>
       </tr>`;
@@ -445,7 +449,7 @@ function setAuthTab(tab) {
   state.authTab = tab;
   $$('.authTab').forEach(b => {
     const active = b.dataset.tab === tab;
-    b.className = `authTab flex-1 py-1.5 rounded-lg ${active ? 'btn-primary' : 'bg-slate-100'} text-sm`;
+    b.className = `authTab flex-1 py-1.5 rounded-lg ${active ? 'bg-brand text-white' : 'bg-slate-100'} text-sm`;
   });
   $('#authSubmitText').textContent = tab === 'login' ? 'Login' : 'Create account';
 }
@@ -471,7 +475,7 @@ $('#authForm').onsubmit = async (e) => {
     localStorage.setItem('user', JSON.stringify(data.user));
     $('#authModal').classList.add('hidden');
     $('#authForm').reset();
-    renderUserArea(); renderRows(); loadStats();
+    renderUserArea(); renderRows();
   } catch (err) {
     $('#authErr').textContent = err.message;
     $('#authErr').classList.remove('hidden');
@@ -493,29 +497,36 @@ $('#whatsappBtn').onclick = async () => {
   window.open(url, '_blank');
 };
 
-// Filters - reset to page 1 on filter change
+// Filters reset to page 1 on change
 ['search','categoryFilter','sortBy','minPrice','maxPrice'].forEach(id => {
   $('#' + id).addEventListener('input', () => { state.page = 1; renderRows(); });
 });
 
 // Pagination controls
-$('#firstPage').onclick = () => { state.page = 1; renderRows(); };
-$('#prevPage').onclick = () => { state.page--; renderRows(); };
-$('#nextPage').onclick = () => { state.page++; renderRows(); };
-$('#lastPage').onclick = () => { state.page = Math.ceil(filtered().length / state.pageSize); renderRows(); };
 $('#pageSize').value = state.pageSize;
-$('#pageSize').onchange = (e) => {
-  state.pageSize = parseInt(e.target.value, 10);
-  localStorage.setItem('pageSize', String(state.pageSize));
+$('#pageSize').addEventListener('change', () => {
+  state.pageSize = parseInt($('#pageSize').value, 10);
+  localStorage.setItem('pageSize', state.pageSize);
   state.page = 1;
   renderRows();
+});
+$('#prevBtn').onclick = () => { state.page--; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); };
+$('#nextBtn').onclick = () => { state.page++; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); };
+$('#firstBtn').onclick = () => { state.page = 1; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); };
+$('#lastBtn').onclick = () => {
+  const total = filtered().length;
+  state.page = Math.max(1, Math.ceil(total / state.pageSize));
+  renderRows(); window.scrollTo({top:0, behavior:'smooth'});
 };
-$('#gotoPage').addEventListener('change', (e) => {
-  const p = parseInt(e.target.value, 10);
-  if (p >= 1) { state.page = p; renderRows(); e.target.value = ''; }
+$('#pageJump').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const v = parseInt($('#pageJump').value, 10);
+    if (!isNaN(v)) { state.page = v; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); }
+    $('#pageJump').value = '';
+  }
 });
 
-// Select all (current page only)
+// Select all (visible page)
 $('#selectAll').addEventListener('change', (e) => {
   const all = filtered();
   const start = (state.page - 1) * state.pageSize;
