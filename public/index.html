@@ -69,6 +69,11 @@
 </header>
 
 <main class="max-w-7xl mx-auto p-4">
+<div id="recsStrip" class="hidden bg-white border rounded-xl p-3 mb-4 max-w-7xl mx-auto" style="margin-left:1rem;margin-right:1rem">
+  <div class="text-sm font-medium mb-2">✨ Recommended for you</div>
+  <div id="recsList" class="flex gap-2 overflow-x-auto pb-1"></div>
+</div>
+
 
   <!-- ============ CATALOG TAB ============ -->
   <section id="catalogTab" class="tab-content">
@@ -91,6 +96,7 @@
   <!-- Filters -->
   <div class="bg-white border rounded-xl p-4 mb-4 grid grid-cols-1 md:grid-cols-6 gap-3">
     <input id="search" placeholder="Search website or notes..." class="border rounded-lg px-3 py-2 md:col-span-2" />
+          <div id="smartHint" class="hidden text-xs text-emerald-700 mt-1 px-1"></div>
     <select id="categoryFilter" class="border rounded-lg px-3 py-2"><option value="">All categories</option></select>
     <select id="sortBy" class="border rounded-lg px-3 py-2">
       <option value="featured">Featured first</option>
@@ -1064,6 +1070,70 @@ async function init() {
   await loadWebsites();
 }
 init();
+
+
+// Smart search + recommendations
+(function() {
+  const sInput = document.getElementById('search');
+  const hint = document.getElementById('smartHint');
+  let st;
+  if (sInput) {
+    sInput.addEventListener('input', () => {
+      clearTimeout(st);
+      const q = sInput.value.trim();
+      if (!hint) return;
+      hint.classList.add('hidden');
+      window.__smartFilter = null;
+      if (q.length < 5 || !/(\d+|under|above|over|less than|more than|dr|da|featured|premium|top|best)/i.test(q)) return;
+      st = setTimeout(async () => {
+        try {
+          const r = await fetch('/api/smart-search', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ query: q }) }).then(x => x.json());
+          if (Object.keys(r.filters || {}).length > 0) {
+            window.__smartFilter = r.filters;
+            const parts = [];
+            if (r.filters.minPrice) parts.push('min $' + r.filters.minPrice);
+            if (r.filters.maxPrice) parts.push('max $' + r.filters.maxPrice);
+            if (r.filters.minDR) parts.push('DR≥' + r.filters.minDR);
+            if (r.filters.maxDR) parts.push('DR≤' + r.filters.maxDR);
+            if (r.filters.minDA) parts.push('DA≥' + r.filters.minDA);
+            if (r.filters.minTraffic) parts.push('traffic≥' + r.filters.minTraffic.toLocaleString());
+            if (r.filters.category) parts.push('category: ' + r.filters.category);
+            if (r.filters.featured) parts.push('featured');
+            if (r.filters.text) parts.push('text: "' + r.filters.text + '"');
+            hint.textContent = '🔍 ' + parts.join(' · ') + ' (' + r.count + ' matches)';
+            hint.classList.remove('hidden');
+          }
+        } catch(e) { console.warn(e); }
+      }, 350);
+    });
+  }
+
+  async function loadRecs() {
+    try {
+      const stUser = localStorage.getItem('user');
+      const u = stUser ? JSON.parse(stUser) : null;
+      const strip = document.getElementById('recsStrip');
+      if (!strip) return;
+      if (!u || u.role === 'admin') { strip.classList.add('hidden'); return; }
+      const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+      const headers = { 'Content-Type': 'application/json' };
+      const tk = localStorage.getItem('token');
+      if (tk) headers.Authorization = 'Bearer ' + tk;
+      const r = await fetch('/api/recommendations', { method:'POST', headers, body: JSON.stringify({ cart_ids: cart.map(c => c.id) }) }).then(x => x.json());
+      if (!r.items || !r.items.length) { strip.classList.add('hidden'); return; }
+      strip.classList.remove('hidden');
+      document.getElementById('recsList').innerHTML = r.items.map(w =>
+        '<div class="flex-shrink-0 w-48 border rounded-lg p-2"><div class="font-medium text-xs truncate">' + w.website + '</div>' +
+        '<div class="text-xs text-slate-500">' + (w.category||'-') + ' · $' + (w.price||0) + '</div></div>'
+      ).join('');
+    } catch(e) {}
+  }
+  // Try to load after a small delay (let main app init first)
+  setTimeout(loadRecs, 1200);
+  // Refresh recs when cart changes
+  window.addEventListener('storage', (e) => { if (e.key === 'cart') loadRecs(); });
+})();
+
 </script>
 </body>
 </html>

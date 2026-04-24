@@ -561,44 +561,36 @@ app.get('/api/rates', (req,res) => res.json(currencyCache));
 
 
 // ----- Smart search (regex-based, no API key needed) -----
-app.post('/api/smart-search', (req,res) => {
-  const q = String(req.body?.query || '').toLowerCase();
+app.post('/api/smart-search', (req, res) => {
+  let q = String(req.body && req.body.query || '').toLowerCase();
   if (!q) return res.json({ filters: {}, count: 0, ids: [] });
   const filters = {};
   let m;
-  if ((m = q.match(/(?:under|below|less than|max|<=?)\s*\$?\s*(\d+)/))) filters.maxPrice = Number(m[1]);
-  if ((m = q.match(/(?:over|above|more than|min|>=?)\s*\$?\s*(\d+)/))) filters.minPrice = Number(m[1]);
-  if ((m = q.match(/between\s*\$?\s*(\d+)\s*(?:and|to|-)\s*\$?\s*(\d+)/))) { filters.minPrice = Number(m[1]); filters.maxPrice = Number(m[2]); }
-  if ((m = q.match(/dr\s*(?:>|>=|over|above|min|of at least)\s*(\d+)/))) filters.minDR = Number(m[1]);
-  if ((m = q.match(/dr\s*(?:<|<=|under|below|max)\s*(\d+)/))) filters.maxDR = Number(m[1]);
-  if ((m = q.match(/da\s*(?:>|>=|over|above|min)\s*(\d+)/))) filters.minDA = Number(m[1]);
-  if ((m = q.match(/da\s*(?:<|<=|under|below|max)\s*(\d+)/))) filters.maxDA = Number(m[1]);
-  if ((m = q.match(/traffic\s*(?:>|>=|over|above|min)\s*(\d+)k?/))) {
-    let v = Number(m[1]); if (/\d+k/.test(m[0])) v *= 1000;
-    filters.minTraffic = v;
-  }
-  const cats = [...new Set(store.websites.filter(w=>!w.deleted_at).map(w => (w.category||'').toLowerCase()).filter(Boolean))];
-  for (const c of cats) if (q.includes(c)) { filters.category = c; break; }
-  if (/featured|premium|top|best/.test(q)) filters.featured = true;
-  let text = q.replace(/(?:under|below|less than|max|<=?|over|above|more than|min|>=?)\s*\$?\s*\d+/g, '')
-    .replace(/dr\s*[><=]+?\s*\d+/g, '').replace(/da\s*[><=]+?\s*\d+/g, '')
-    .replace(/traffic\s*[><=]+?\s*\d+k?/g, '').replace(/featured|premium|top|best/g, '')
-    .replace(/sites?|websites?/g, '').trim();
+  if ((m = q.match(/dr\s*(?:>=?|over|above|min|of at least)\s*(\d+)/))) { filters.minDR = Number(m[1]); q = q.replace(m[0], ' '); }
+  if ((m = q.match(/dr\s*(?:<=?|under|below|max)\s*(\d+)/))) { filters.maxDR = Number(m[1]); q = q.replace(m[0], ' '); }
+  if ((m = q.match(/da\s*(?:>=?|over|above|min)\s*(\d+)/))) { filters.minDA = Number(m[1]); q = q.replace(m[0], ' '); }
+  if ((m = q.match(/da\s*(?:<=?|under|below|max)\s*(\d+)/))) { filters.maxDA = Number(m[1]); q = q.replace(m[0], ' '); }
+  if ((m = q.match(/traffic\s*(?:>=?|over|above|min)\s*(\d+)k?/))) { let v = Number(m[1]); if (/k\b/.test(m[0])) v *= 1000; filters.minTraffic = v; q = q.replace(m[0], ' '); }
+  if ((m = q.match(/(?:under|below|less than|max)\s*\$?\s*(\d+)/))) { filters.maxPrice = Number(m[1]); q = q.replace(m[0], ' '); }
+  if ((m = q.match(/(?:over|above|more than|min)\s*\$?\s*(\d+)/))) { filters.minPrice = Number(m[1]); q = q.replace(m[0], ' '); }
+  if ((m = q.match(/between\s*\$?\s*(\d+)\s*(?:and|to|-)\s*\$?\s*(\d+)/))) { filters.minPrice = Number(m[1]); filters.maxPrice = Number(m[2]); q = q.replace(m[0], ' '); }
+  const cats = [...new Set(store.websites.map(w => (w.category||'').toLowerCase()).filter(Boolean))];
+  for (const c of cats) if (q.includes(c)) { filters.category = c; q = q.replace(c, ' '); break; }
+  if (/featured|premium|top|best/.test(q)) { filters.featured = true; q = q.replace(/featured|premium|top|best/g, ' '); }
+  let text = q.replace(/sites?|websites?|with|and|the|a|an/g, ' ').replace(/\s+/g, ' ').trim();
   if (text.length >= 3) filters.text = text;
-
-  let results = store.websites.filter(w => !w.deleted_at);
-  if (filters.maxPrice != null) results = results.filter(w => (w.price||0) <= filters.maxPrice);
-  if (filters.minPrice != null) results = results.filter(w => (w.price||0) >= filters.minPrice);
-  if (filters.minDR != null) results = results.filter(w => (w.dr||0) >= filters.minDR);
-  if (filters.maxDR != null) results = results.filter(w => (w.dr||0) <= filters.maxDR);
-  if (filters.minDA != null) results = results.filter(w => (w.da||0) >= filters.minDA);
-  if (filters.maxDA != null) results = results.filter(w => (w.da||0) <= filters.maxDA);
-  if (filters.minTraffic != null) results = results.filter(w => (w.traffic||0) >= filters.minTraffic);
-  if (filters.category) results = results.filter(w => (w.category||'').toLowerCase() === filters.category);
-  if (filters.featured) results = results.filter(w => w.featured);
-  if (filters.text) results = results.filter(w => (w.website||'').toLowerCase().includes(filters.text) || (w.notes||'').toLowerCase().includes(filters.text));
-
-  res.json({ filters, count: results.length, ids: results.slice(0, 500).map(w => w.id) });
+  let r = store.websites.filter(w => !w.deleted_at);
+  if (filters.maxPrice != null) r = r.filter(w => (w.price||0) <= filters.maxPrice);
+  if (filters.minPrice != null) r = r.filter(w => (w.price||0) >= filters.minPrice);
+  if (filters.minDR != null) r = r.filter(w => (w.dr||0) >= filters.minDR);
+  if (filters.maxDR != null) r = r.filter(w => (w.dr||0) <= filters.maxDR);
+  if (filters.minDA != null) r = r.filter(w => (w.da||0) >= filters.minDA);
+  if (filters.maxDA != null) r = r.filter(w => (w.da||0) <= filters.maxDA);
+  if (filters.minTraffic != null) r = r.filter(w => (w.traffic||0) >= filters.minTraffic);
+  if (filters.category) r = r.filter(w => (w.category||'').toLowerCase() === filters.category);
+  if (filters.featured) r = r.filter(w => w.featured);
+  if (filters.text) r = r.filter(w => (w.website||'').toLowerCase().includes(filters.text) || (w.notes||'').toLowerCase().includes(filters.text));
+  res.json({ filters, count: r.length, ids: r.slice(0, 500).map(w => w.id) });
 });
 
 // ----- Recommendations (similarity scoring) -----
