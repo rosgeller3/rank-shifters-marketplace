@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rank Shifters - Website Marketplace</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .star { color: #f59e0b; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+<!-- Top bar -->
+<header class="bg-white border-b sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded bg-indigo-600 text-white grid place-items-center font-bold">R</div>
+      <h1 class="text-lg font-semibold">Rank Shifters</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="cartBtn" class="relative px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">
+        Cart <span id="cartCount" class="ml-1 inline-block min-w-[20px] text-center text-xs bg-indigo-600 text-white rounded-full px-1.5">0</span>
+      </button>
+      <div id="userArea"></div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto p-4">
+
+  <!-- Stats -->
+  <div id="statsBar" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Total Sites</div><div id="sTotal" class="text-2xl font-semibold mt-1">-</div></div>
+    <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Avg Price</div><div id="sAvg" class="text-2xl font-semibold mt-1">-</div></div>
+    <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Price Range</div><div id="sRange" class="text-2xl font-semibold mt-1">-</div></div>
+    <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Avg DR</div><div id="sDR" class="text-2xl font-semibold mt-1">-</div></div>
+    <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Avg DA</div><div id="sDA" class="text-2xl font-semibold mt-1">-</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-white border rounded-xl p-4 mb-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+    <input id="search" placeholder="Search website or notes..." class="border rounded-lg px-3 py-2 md:col-span-2" />
+    <select id="categoryFilter" class="border rounded-lg px-3 py-2"><option value="">All categories</option></select>
+    <select id="sortBy" class="border rounded-lg px-3 py-2">
+      <option value="featured">Featured first</option>
+      <option value="id_desc">Newest</option>
+      <option value="price_asc">Price: Low to High</option>
+      <option value="price_desc">Price: High to Low</option>
+      <option value="dr_desc">DR: High to Low</option>
+      <option value="da_desc">DA: High to Low</option>
+      <option value="traffic_desc">Traffic: High to Low</option>
+    </select>
+    <input id="minPrice" type="number" placeholder="Min $" class="border rounded-lg px-3 py-2" />
+    <input id="maxPrice" type="number" placeholder="Max $" class="border rounded-lg px-3 py-2" />
+  </div>
+
+  <!-- Admin actions -->
+  <div id="adminBar" class="hidden mb-4 flex flex-wrap gap-2">
+    <button id="addBtn" class="px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">+ Add Website</button>
+    <button id="importBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Import CSV</button>
+    <button id="exportBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Export CSV</button>
+    <button id="bulkDeleteBtn" class="hidden px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Selected (<span id="selCount">0</span>)</button>
+    <div class="ml-auto flex gap-2">
+      <button id="inquiriesBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Inquiries</button>
+      <button id="usersBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Users</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-white border rounded-xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-100 text-slate-600">
+          <tr>
+            <th id="selectAllTh" class="hidden text-center px-3 py-3 w-10"><input type="checkbox" id="selectAll" /></th>
+            <th class="text-left px-4 py-3">Website</th>
+            <th class="text-left px-4 py-3">Category</th>
+            <th class="text-right px-4 py-3">Price</th>
+            <th class="text-right px-4 py-3">DR</th>
+            <th class="text-right px-4 py-3">DA</th>
+            <th class="text-right px-4 py-3">Traffic</th>
+            <th class="text-left px-4 py-3">Notes</th>
+            <th class="text-right px-4 py-3">Action</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div id="empty" class="hidden p-8 text-center text-slate-500">No results.</div>
+    <div class="p-3 text-xs text-slate-500 border-t flex justify-between">
+      <span id="resultCount">0 results</span>
+      <span id="resultTotal"></span>
+    </div>
+  </div>
+</main>
+
+<!-- Cart drawer -->
+<div id="cartDrawer" class="hidden fixed inset-0 z-40">
+  <div class="absolute inset-0 bg-black/40" data-close></div>
+  <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+    <div class="p-4 border-b flex items-center justify-between">
+      <h2 class="font-semibold">Your Cart</h2>
+      <button data-close class="text-slate-500 hover:text-slate-800">✕</button>
+    </div>
+    <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+    <div class="border-t p-4 space-y-3">
+      <div class="flex justify-between text-sm"><span>Items</span><span id="cartItemCount">0</span></div>
+      <div class="flex justify-between font-semibold"><span>Total</span><span id="cartTotal">$0</span></div>
+      <button id="whatsappBtn" class="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium">
+        Contact on WhatsApp
+      </button>
+      <button id="clearCart" class="w-full py-2 rounded-lg border text-sm hover:bg-slate-50">Clear cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auth modal -->
+<div id="authModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-sm p-5 shadow-xl">
+    <div class="flex gap-2 mb-4">
+      <button class="authTab flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-sm" data-tab="login">Login</button>
+      <button class="authTab flex-1 py-1.5 rounded-lg bg-slate-100 text-sm" data-tab="register">Register</button>
+    </div>
+    <form id="authForm" class="space-y-3">
+      <input id="authUser" placeholder="Username" class="w-full border rounded-lg px-3 py-2" required autocomplete="username" />
+      <input id="authPass" type="password" placeholder="Password" class="w-full border rounded-lg px-3 py-2" required autocomplete="current-password" />
+      <div id="authErr" class="text-sm text-red-600 hidden"></div>
+      <button class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" type="submit">
+        <span id="authSubmitText">Login</span>
+      </button>
+    </form>
+    <p class="text-xs text-slate-500 mt-3 text-center">Sub-users can register to browse and request quotes.</p>
+  </div>
+</div>
+
+<!-- Edit/Add modal -->
+<div id="editModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-md p-5 shadow-xl">
+    <h3 id="editTitle" class="font-semibold mb-3">Add Website</h3>
+    <form id="editForm" class="space-y-3">
+      <input type="hidden" id="editId" />
+      <input id="f_website" placeholder="Website (e.g. example.com)" class="w-full border rounded-lg px-3 py-2" required />
+      <input id="f_category" placeholder="Category" class="w-full border rounded-lg px-3 py-2" />
+      <div class="grid grid-cols-2 gap-3">
+        <input id="f_price" type="number" step="0.01" placeholder="Price ($)" class="border rounded-lg px-3 py-2" />
+        <input id="f_traffic" type="number" placeholder="Monthly traffic" class="border rounded-lg px-3 py-2" />
+        <input id="f_dr" type="number" placeholder="DR" class="border rounded-lg px-3 py-2" />
+        <input id="f_da" type="number" placeholder="DA" class="border rounded-lg px-3 py-2" />
+      </div>
+      <textarea id="f_notes" placeholder="Notes" class="w-full border rounded-lg px-3 py-2 h-20"></textarea>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="f_featured" /> Featured (pin to top)</label>
+      <div class="flex gap-2 justify-end">
+        <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
+        <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div id="importModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-lg p-5 shadow-xl">
+    <h3 class="font-semibold mb-2">Import websites from CSV</h3>
+    <p class="text-xs text-slate-500 mb-3">Required column: <code>website</code>. Optional: <code>category, price, dr, da, traffic, notes, featured</code>. Existing rows with the same domain are updated.</p>
+    <input type="file" id="csvFile" accept=".csv,text/csv" class="block w-full text-sm border rounded-lg p-2 mb-3" />
+    <textarea id="csvText" placeholder="...or paste CSV here" class="w-full border rounded-lg p-2 text-sm h-32 font-mono"></textarea>
+    <label class="flex items-center gap-2 text-sm mt-3"><input type="checkbox" id="replaceMode" /> Replace all existing websites</label>
+    <div class="flex justify-between items-center mt-4">
+      <a href="#" id="downloadTemplate" class="text-sm text-indigo-600 hover:underline">Download template</a>
+      <div class="flex gap-2">
+        <button data-close class="px-3 py-2 rounded-lg border">Cancel</button>
+        <button id="doImport" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Import</button>
+      </div>
+    </div>
+    <div id="importMsg" class="text-sm mt-3"></div>
+  </div>
+</div>
+
+<!-- Users modal -->
+<div id="usersModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-lg p-5 shadow-xl">
+    <h3 class="font-semibold mb-3">Users</h3>
+    <div id="usersList" class="max-h-96 overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- Inquiries modal -->
+<div id="inquiriesModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-2xl p-5 shadow-xl">
+    <h3 class="font-semibold mb-3">WhatsApp Inquiries</h3>
+    <div id="inquiriesList" class="max-h-[70vh] overflow-y-auto space-y-3"></div>
+  </div>
+</div>
+
+<script>
+const state = {
+  token: localStorage.getItem('token'),
+  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  cart: JSON.parse(localStorage.getItem('cart') || '[]'),
+  websites: [],
+  categories: new Set(),
+  selected: new Set(),
+  whatsapp: '',
+  authTab: 'login',
+};
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  return fetch(path, { ...opts, headers }).then(async r => {
+    const ct = r.headers.get('content-type') || '';
+    const data = ct.includes('json') ? await r.json().catch(() => ({})) : await r.text();
+    if (!r.ok) throw new Error((data && data.error) || 'Request failed');
+    return data;
+  });
+}
+
+const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString();
+const fmtNum = (n) => Number(n || 0).toLocaleString();
+
+function renderUserArea() {
+  const el = $('#userArea');
+  if (state.user) {
+    el.innerHTML = `
+      <div class="flex items-center gap-2 text-sm">
+        <span class="badge ${state.user.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}">${state.user.role}</span>
+        <span class="text-slate-600">${state.user.username}</span>
+        <button id="logoutBtn" class="text-slate-500 hover:text-red-600 text-xs underline">Logout</button>
+      </div>`;
+    $('#logoutBtn').onclick = () => {
+      localStorage.removeItem('token'); localStorage.removeItem('user');
+      state.token = null; state.user = null;
+      state.selected.clear();
+      renderUserArea(); renderRows();
+      $('#adminBar').classList.add('hidden');
+      $('#selectAllTh').classList.add('hidden');
+    };
+  } else {
+    el.innerHTML = `<button id="loginBtn" class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Login / Register</button>`;
+    $('#loginBtn').onclick = () => openAuth();
+  }
+  const isAdmin = state.user && state.user.role === 'admin';
+  $('#adminBar').classList.toggle('hidden', !isAdmin);
+  $('#selectAllTh').classList.toggle('hidden', !isAdmin);
+}
+
+async function loadStats() {
+  try {
+    const s = await api('/api/stats');
+    $('#sTotal').textContent = s.total;
+    $('#sAvg').textContent = fmtMoney(s.avgPrice);
+    $('#sRange').textContent = `${fmtMoney(s.minPrice)} - ${fmtMoney(s.maxPrice)}`;
+    $('#sDR').textContent = s.avgDR;
+    $('#sDA').textContent = s.avgDA;
+  } catch {}
+}
+
+async function loadWebsites() {
+  state.websites = await api('/api/websites');
+  state.categories = new Set(state.websites.map(w => w.category).filter(Boolean));
+  const sel = $('#categoryFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All categories</option>' +
+    [...state.categories].sort().map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.value = cur;
+  renderRows();
+  loadStats();
+}
+
+function filtered() {
+  const q = $('#search').value.toLowerCase().trim();
+  const cat = $('#categoryFilter').value;
+  const min = parseFloat($('#minPrice').value);
+  const max = parseFloat($('#maxPrice').value);
+  let rows = state.websites.filter(w => {
+    if (q && !(w.website.toLowerCase().includes(q) || (w.notes||'').toLowerCase().includes(q))) return false;
+    if (cat && w.category !== cat) return false;
+    if (!isNaN(min) && w.price < min) return false;
+    if (!isNaN(max) && w.price > max) return false;
+    return true;
+  });
+  const sort = $('#sortBy').value;
+  const cmp = {
+    featured: (a,b) => (b.featured||0) - (a.featured||0) || b.id - a.id,
+    id_desc: (a,b) => b.id - a.id,
+    price_asc: (a,b) => a.price - b.price,
+    price_desc: (a,b) => b.price - a.price,
+    dr_desc: (a,b) => b.dr - a.dr,
+    da_desc: (a,b) => b.da - a.da,
+    traffic_desc: (a,b) => b.traffic - a.traffic,
+  }[sort];
+  rows.sort(cmp);
+  return rows;
+}
+
+function whatsappLinkSingle(w) {
+  const msg = `Hi! I'm interested in ${w.website} (${w.category || 'N/A'}) priced at ${fmtMoney(w.price)}.`;
+  return `https://wa.me/${state.whatsapp}?text=${encodeURIComponent(msg)}`;
+}
+
+function renderRows() {
+  const rows = filtered();
+  const isAdmin = state.user && state.user.role === 'admin';
+  $('#empty').classList.toggle('hidden', rows.length > 0);
+  $('#resultCount').textContent = `${rows.length} of ${state.websites.length} websites`;
+  const sumP = rows.reduce((s,w) => s + (w.price||0), 0);
+  $('#resultTotal').textContent = `Total value: ${fmtMoney(sumP)}`;
+  $('#rows').innerHTML = rows.map(w => {
+    const inCart = state.cart.some(c => c.id === w.id);
+    const sel = state.selected.has(w.id) ? 'checked' : '';
+    return `
+      <tr class="border-t hover:bg-slate-50 ${w.featured ? 'bg-amber-50/40' : ''}">
+        ${isAdmin ? `<td class="text-center px-3 py-3"><input type="checkbox" class="rowSel" data-id="${w.id}" ${sel}/></td>` : ''}
+        <td class="px-4 py-3 font-medium">
+          ${w.featured ? '<span class="star mr-1" title="Featured">★</span>' : ''}
+          <a href="https://${w.website.replace(/^https?:\/\//,'')}" target="_blank" class="text-indigo-600 hover:underline">${w.website}</a>
+        </td>
+        <td class="px-4 py-3"><span class="badge bg-slate-100 text-slate-700">${w.category || '-'}</span></td>
+        <td class="px-4 py-3 text-right font-semibold">${fmtMoney(w.price)}</td>
+        <td class="px-4 py-3 text-right">${w.dr || '-'}</td>
+        <td class="px-4 py-3 text-right">${w.da || '-'}</td>
+        <td class="px-4 py-3 text-right text-slate-600">${fmtNum(w.traffic)}</td>
+        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${(w.notes||'').replace(/"/g,'&quot;')}">${w.notes || ''}</td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          ${isAdmin
+            ? `<button class="text-indigo-600 hover:underline text-xs mr-2" onclick="editRow(${w.id})">Edit</button>
+               <button class="text-red-600 hover:underline text-xs" onclick="deleteRow(${w.id})">Delete</button>`
+            : `<a href="${whatsappLinkSingle(w)}" target="_blank" class="inline-block px-2 py-1 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 mr-1">WhatsApp</a>
+               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}" onclick="toggleCart(${w.id})">${inCart ? 'In cart' : '+ Add'}</button>`
+          }
+        </td>
+      </tr>`;
+  }).join('');
+  if (isAdmin) {
+    $$('.rowSel').forEach(cb => cb.addEventListener('change', () => {
+      const id = Number(cb.dataset.id);
+      if (cb.checked) state.selected.add(id); else state.selected.delete(id);
+      updateSelected();
+    }));
+  }
+  updateSelected();
+}
+
+function updateSelected() {
+  $('#selCount').textContent = state.selected.size;
+  $('#bulkDeleteBtn').classList.toggle('hidden', state.selected.size === 0);
+}
+
+function toggleCart(id) {
+  if (!state.user) { openAuth(); return; }
+  const idx = state.cart.findIndex(c => c.id === id);
+  if (idx >= 0) state.cart.splice(idx, 1);
+  else {
+    const w = state.websites.find(x => x.id === id);
+    state.cart.push({ id: w.id, website: w.website, price: w.price });
+  }
+  saveCart(); renderRows(); renderCart();
+}
+window.toggleCart = toggleCart;
+
+function saveCart() {
+  localStorage.setItem('cart', JSON.stringify(state.cart));
+  $('#cartCount').textContent = state.cart.length;
+}
+
+function renderCart() {
+  $('#cartCount').textContent = state.cart.length;
+  $('#cartItemCount').textContent = state.cart.length;
+  const total = state.cart.reduce((s, c) => s + Number(c.price || 0), 0);
+  $('#cartTotal').textContent = fmtMoney(total);
+  $('#cartItems').innerHTML = state.cart.length === 0
+    ? '<p class="text-sm text-slate-500 text-center py-8">Your cart is empty.</p>'
+    : state.cart.map(c => `
+        <div class="flex items-center justify-between border rounded-lg p-3">
+          <div>
+            <div class="font-medium text-sm">${c.website}</div>
+            <div class="text-xs text-slate-500">${fmtMoney(c.price)}</div>
+          </div>
+          <button class="text-red-500 text-xs" onclick="toggleCart(${c.id})">Remove</button>
+        </div>`).join('');
+}
+
+// Modals
+function openAuth() { $('#authModal').classList.remove('hidden'); setAuthTab('login'); }
+function setAuthTab(tab) {
+  state.authTab = tab;
+  $$('.authTab').forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.className = `authTab flex-1 py-1.5 rounded-lg ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100'} text-sm`;
+  });
+  $('#authSubmitText').textContent = tab === 'login' ? 'Login' : 'Create account';
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.matches('[data-close]')) {
+    e.target.closest('.fixed')?.classList.add('hidden');
+  }
+  if (e.target.classList.contains('authTab')) setAuthTab(e.target.dataset.tab);
+});
+
+$('#authForm').onsubmit = async (e) => {
+  e.preventDefault();
+  $('#authErr').classList.add('hidden');
+  try {
+    const path = state.authTab === 'login' ? '/api/login' : '/api/register';
+    const data = await api(path, {
+      method: 'POST',
+      body: JSON.stringify({ username: $('#authUser').value.trim(), password: $('#authPass').value })
+    });
+    state.token = data.token; state.user = data.user;
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    $('#authModal').classList.add('hidden');
+    $('#authForm').reset();
+    renderUserArea(); renderRows();
+  } catch (err) {
+    $('#authErr').textContent = err.message;
+    $('#authErr').classList.remove('hidden');
+  }
+};
+
+$('#cartBtn').onclick = () => { renderCart(); $('#cartDrawer').classList.remove('hidden'); };
+$('#clearCart').onclick = () => { state.cart = []; saveCart(); renderCart(); renderRows(); };
+
+$('#whatsappBtn').onclick = async () => {
+  if (state.cart.length === 0) { alert('Your cart is empty.'); return; }
+  const total = state.cart.reduce((s, c) => s + Number(c.price || 0), 0);
+  // Log inquiry (best effort)
+  try {
+    await api('/api/inquiries', { method: 'POST', body: JSON.stringify({ items: state.cart, total }) });
+  } catch {}
+  const lines = state.cart.map((c, i) => `${i+1}. ${c.website} - ${fmtMoney(c.price)}`).join('\n');
+  const msg = `Hi! I'd like to inquire about these websites:\n\n${lines}\n\nTotal: ${fmtMoney(total)}\n\nMy username: ${state.user ? state.user.username : 'guest'}`;
+  const url = `https://wa.me/${state.whatsapp}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+};
+
+// Filters
+['search','categoryFilter','sortBy','minPrice','maxPrice'].forEach(id => {
+  $('#' + id).addEventListener('input', renderRows);
+});
+
+// Select all
+$('#selectAll').addEventListener('change', (e) => {
+  const visible = filtered();
+  if (e.target.checked) visible.forEach(w => state.selected.add(w.id));
+  else visible.forEach(w => state.selected.delete(w.id));
+  renderRows();
+});
+
+// Admin
+$('#addBtn').onclick = () => openEdit();
+$('#bulkDeleteBtn').onclick = async () => {
+  if (!confirm(`Delete ${state.selected.size} websites?`)) return;
+  await api('/api/websites/bulk-delete', { method: 'POST', body: JSON.stringify({ ids: [...state.selected] }) });
+  state.selected.clear();
+  await loadWebsites();
+};
+
+$('#exportBtn').onclick = () => {
+  window.location.href = '/api/websites/export' + (state.token ? '?token=' + encodeURIComponent(state.token) : '');
+};
+
+$('#importBtn').onclick = () => {
+  $('#importMsg').textContent = '';
+  $('#csvText').value = '';
+  $('#csvFile').value = '';
+  $('#replaceMode').checked = false;
+  $('#importModal').classList.remove('hidden');
+};
+
+$('#downloadTemplate').onclick = (e) => {
+  e.preventDefault();
+  const csv = 'website,category,price,dr,da,traffic,notes,featured\nexample.com,Technology,100,50,51,10000,Sample notes,0\n';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'websites-template.csv'; a.click();
+};
+
+$('#csvFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  $('#csvText').value = await file.text();
+});
+
+$('#doImport').onclick = async () => {
+  const csv = $('#csvText').value.trim();
+  if (!csv) { $('#importMsg').textContent = 'Please choose a file or paste CSV.'; return; }
+  const replace = $('#replaceMode').checked ? '?replace=1' : '';
+  try {
+    $('#importMsg').textContent = 'Importing...';
+    const r = await api('/api/websites/import' + replace, { method: 'POST', body: JSON.stringify({ csv }) });
+    $('#importMsg').className = 'text-sm mt-3 text-green-700';
+    $('#importMsg').textContent = `Done. Added: ${r.added}, Updated: ${r.updated}, Total: ${r.total}`;
+    await loadWebsites();
+  } catch (err) {
+    $('#importMsg').className = 'text-sm mt-3 text-red-600';
+    $('#importMsg').textContent = err.message;
+  }
+};
+
+$('#usersBtn').onclick = async () => {
+  try {
+    const users = await api('/api/users');
+    $('#usersList').innerHTML = `
+      <table class="w-full text-sm">
+        <thead class="bg-slate-100"><tr><th class="text-left p-2">User</th><th class="text-left p-2">Role</th><th class="text-left p-2">Joined</th><th></th></tr></thead>
+        <tbody>${users.map(u => `<tr class="border-t">
+          <td class="p-2">${u.username}</td>
+          <td class="p-2"><span class="badge ${u.role==='admin'?'bg-amber-100 text-amber-700':'bg-slate-100'}">${u.role}</span></td>
+          <td class="p-2 text-slate-500 text-xs">${new Date(u.created_at).toLocaleString()}</td>
+          <td class="p-2 text-right">${u.role !== 'admin' ? `<button class="text-red-600 text-xs" onclick="delUser(${u.id})">Delete</button>` : ''}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    $('#usersModal').classList.remove('hidden');
+  } catch (e) { alert(e.message); }
+};
+window.delUser = async (id) => {
+  if (!confirm('Delete this user?')) return;
+  await api('/api/users/' + id, { method: 'DELETE' });
+  $('#usersBtn').click();
+};
+
+$('#inquiriesBtn').onclick = async () => {
+  try {
+    const list = await api('/api/inquiries');
+    $('#inquiriesList').innerHTML = list.length === 0
+      ? '<p class="text-sm text-slate-500 text-center py-8">No inquiries yet.</p>'
+      : list.map(i => `
+        <div class="border rounded-lg p-3">
+          <div class="flex justify-between text-sm mb-2">
+            <div><b>${i.username}</b> <span class="text-slate-500 text-xs">- ${new Date(i.created_at).toLocaleString()}</span></div>
+            <div class="font-semibold">${fmtMoney(i.total)}</div>
+          </div>
+          <ul class="text-sm text-slate-600 list-disc list-inside">
+            ${i.items.map(it => `<li>${it.website} - ${fmtMoney(it.price)}</li>`).join('')}
+          </ul>
+          <div class="text-right mt-2"><button class="text-red-600 text-xs" onclick="delInq(${i.id})">Delete</button></div>
+        </div>`).join('');
+    $('#inquiriesModal').classList.remove('hidden');
+  } catch (e) { alert(e.message); }
+};
+window.delInq = async (id) => {
+  await api('/api/inquiries/' + id, { method: 'DELETE' });
+  $('#inquiriesBtn').click();
+};
+
+function openEdit(w) {
+  $('#editTitle').textContent = w ? 'Edit Website' : 'Add Website';
+  $('#editId').value = w?.id || '';
+  $('#f_website').value = w?.website || '';
+  $('#f_category').value = w?.category || '';
+  $('#f_price').value = w?.price ?? '';
+  $('#f_dr').value = w?.dr ?? '';
+  $('#f_da').value = w?.da ?? '';
+  $('#f_traffic').value = w?.traffic ?? '';
+  $('#f_notes').value = w?.notes || '';
+  $('#f_featured').checked = !!w?.featured;
+  $('#editModal').classList.remove('hidden');
+}
+window.editRow = (id) => openEdit(state.websites.find(w => w.id === id));
+window.deleteRow = async (id) => {
+  if (!confirm('Delete this website?')) return;
+  await api('/api/websites/' + id, { method: 'DELETE' });
+  await loadWebsites();
+};
+
+$('#editForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const payload = {
+    website: $('#f_website').value.trim(),
+    category: $('#f_category').value.trim(),
+    price: $('#f_price').value,
+    dr: $('#f_dr').value,
+    da: $('#f_da').value,
+    traffic: $('#f_traffic').value,
+    notes: $('#f_notes').value.trim(),
+    featured: $('#f_featured').checked,
+  };
+  const id = $('#editId').value;
+  try {
+    if (id) await api('/api/websites/' + id, { method: 'PUT', body: JSON.stringify(payload) });
+    else await api('/api/websites', { method: 'POST', body: JSON.stringify(payload) });
+    $('#editModal').classList.add('hidden');
+    await loadWebsites();
+  } catch (err) { alert(err.message); }
+};
+
+// Init
+async function init() {
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json());
+    state.whatsapp = cfg.whatsapp;
+  } catch {}
+  saveCart();
+  renderUserArea();
+  await loadWebsites();
+}
+init();
+</script>
+</body>
+</html>
