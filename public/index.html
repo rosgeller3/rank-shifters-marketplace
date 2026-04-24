@@ -3,38 +3,81 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rank Shifters - Website Marketplace</title>
+<title>Rank Shifters - Marketplace</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-  tailwind.config = {
-    theme: { extend: { colors: { brand: { DEFAULT: '#16a34a', dark: '#15803d', light: '#22c55e' } } } }
-  }
+  tailwind.config = { theme: { extend: { colors: { brand: { DEFAULT:'#16a34a', dark:'#15803d', light:'#22c55e' } } } } }
 </script>
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-  .star { color: #f59e0b; }
+  .star { color:#f59e0b; }
+  .tab-btn { padding:0.5rem 1rem; border-bottom:2px solid transparent; cursor:pointer; font-weight:500; color:#475569; }
+  .tab-btn.active { border-color:#16a34a; color:#16a34a; }
+  .status-pending { background:#fef3c7; color:#92400e; }
+  .status-approved { background:#dbeafe; color:#1e40af; }
+  .status-paid { background:#d1fae5; color:#065f46; }
+  .status-delivered { background:#dcfce7; color:#166534; }
+  .status-cancelled { background:#fee2e2; color:#991b1b; }
+  /* Mobile card view */
+  @media (max-width: 768px) {
+    .desktop-table { display:none; }
+    .mobile-cards { display:block; }
+  }
+  @media (min-width: 769px) {
+    .desktop-table { display:block; }
+    .mobile-cards { display:none; }
+  }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-<!-- Top bar -->
+<!-- Header -->
 <header class="bg-white border-b sticky top-0 z-30">
-  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
     <div class="flex items-center gap-2">
       <div class="w-8 h-8 rounded bg-brand text-white grid place-items-center font-bold">R</div>
       <h1 class="text-lg font-semibold">Rank Shifters</h1>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2 flex-wrap">
+      <select id="currency" class="border rounded-lg px-2 py-1 text-sm">
+        <option value="USD">USD $</option><option value="INR">INR ₹</option><option value="EUR">EUR €</option>
+        <option value="GBP">GBP £</option><option value="CAD">CAD C$</option><option value="AUD">AUD A$</option>
+      </select>
+      <button id="wishlistBtn" class="relative px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50 hidden">
+        ♡ <span id="wishlistCount" class="text-xs">0</span>
+      </button>
       <button id="cartBtn" class="relative px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">
         Cart <span id="cartCount" class="ml-1 inline-block min-w-[20px] text-center text-xs bg-brand text-white rounded-full px-1.5">0</span>
       </button>
       <div id="userArea"></div>
     </div>
   </div>
+
+  <!-- Tabs -->
+  <div class="max-w-7xl mx-auto px-4 border-t flex overflow-x-auto">
+    <button class="tab-btn active" data-tab="catalog">Catalog</button>
+    <button class="tab-btn hidden" data-tab="wishlist" id="tabWishlist">My Wishlist</button>
+    <button class="tab-btn hidden" data-tab="orders" id="tabOrders">My Orders</button>
+    <button class="tab-btn hidden" data-tab="adminOrders" id="tabAdminOrders">Orders</button>
+    <button class="tab-btn hidden" data-tab="inquiries" id="tabInquiries">Inquiries</button>
+    <button class="tab-btn hidden" data-tab="analytics" id="tabAnalytics">Analytics</button>
+    <button class="tab-btn hidden" data-tab="users" id="tabUsers">Users</button>
+    <button class="tab-btn hidden" data-tab="trash" id="tabTrash">Trash</button>
+  </div>
 </header>
 
 <main class="max-w-7xl mx-auto p-4">
+
+  <!-- ============ CATALOG TAB ============ -->
+  <section id="catalogTab" class="tab-content">
+
+  <!-- Trending -->
+  <div id="trendingBar" class="hidden mb-4 bg-white border rounded-xl p-3">
+    <div class="text-xs text-slate-500 mb-2 font-semibold">🔥 TRENDING THIS WEEK</div>
+    <div id="trendingList" class="flex gap-2 flex-wrap"></div>
+  </div>
 
   <!-- Stats (admin only) -->
   <div id="statsBar" class="hidden grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
@@ -52,14 +95,15 @@
     <select id="sortBy" class="border rounded-lg px-3 py-2">
       <option value="featured">Featured first</option>
       <option value="id_desc">Newest</option>
+      <option value="views_desc">Most viewed</option>
       <option value="price_asc">Price: Low to High</option>
       <option value="price_desc">Price: High to Low</option>
       <option value="dr_desc">DR: High to Low</option>
       <option value="da_desc">DA: High to Low</option>
       <option value="traffic_desc">Traffic: High to Low</option>
     </select>
-    <input id="minPrice" type="number" placeholder="Min $" class="border rounded-lg px-3 py-2" />
-    <input id="maxPrice" type="number" placeholder="Max $" class="border rounded-lg px-3 py-2" />
+    <input id="minPrice" type="number" placeholder="Min" class="border rounded-lg px-3 py-2" />
+    <input id="maxPrice" type="number" placeholder="Max" class="border rounded-lg px-3 py-2" />
   </div>
 
   <!-- Admin actions -->
@@ -67,26 +111,24 @@
     <button id="addBtn" class="px-3 py-2 text-sm bg-brand hover:bg-brand-dark text-white rounded-lg">+ Add Website</button>
     <button id="importBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Import CSV</button>
     <button id="exportBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Export CSV</button>
-    <button id="bulkDeleteBtn" class="hidden px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Selected (<span id="selCount">0</span>)</button>
-    <div class="ml-auto flex gap-2">
-      <button id="inquiriesBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Inquiries</button>
-      <button id="usersBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Users</button>
-    </div>
+    <button id="bulkEditBtn" class="hidden px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Bulk Edit (<span id="bulkCount">0</span>)</button>
+    <button id="bulkDeleteBtn" class="hidden px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Selected</button>
   </div>
 
-  <!-- Table -->
-  <div class="bg-white border rounded-xl overflow-hidden">
+  <!-- Desktop table -->
+  <div class="desktop-table bg-white border rounded-xl overflow-hidden">
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-100 text-slate-600">
           <tr>
-            <th id="selectAllTh" class="hidden text-center px-3 py-3 w-10"><input type="checkbox" id="selectAll" /></th>
+            <th id="selectAllTh" class="hidden text-center px-3 py-3 w-10"><input type="checkbox" id="selectAll"/></th>
             <th class="text-left px-4 py-3">Website</th>
             <th class="text-left px-4 py-3">Category</th>
             <th class="text-right px-4 py-3">Price</th>
             <th class="text-right px-4 py-3">DR</th>
             <th class="text-right px-4 py-3">DA</th>
             <th class="text-right px-4 py-3">Traffic</th>
+            <th class="text-right px-4 py-3 hidden" id="viewsCol">Views</th>
             <th class="text-left px-4 py-3">Notes</th>
             <th class="text-right px-4 py-3">Action</th>
           </tr>
@@ -95,32 +137,84 @@
       </table>
     </div>
     <div id="empty" class="hidden p-8 text-center text-slate-500">No results.</div>
-
-    <!-- Pagination -->
     <div class="border-t p-3 flex flex-wrap gap-3 items-center justify-between text-sm">
-      <div class="text-slate-500">
-        <span id="resultCount">0 results</span>
-        <span id="resultTotal" class="hidden md:inline ml-2 text-slate-400"></span>
-      </div>
+      <span id="resultCount" class="text-slate-500">0 results</span>
       <div class="flex items-center gap-2">
         <label class="text-slate-500">Per page:</label>
         <select id="pageSize" class="border rounded-lg px-2 py-1 text-sm">
-          <option value="25">25</option>
-          <option value="50" selected>50</option>
-          <option value="100">100</option>
-          <option value="250">250</option>
-          <option value="500">500</option>
+          <option>25</option><option selected>50</option><option>100</option><option>250</option><option>500</option>
         </select>
         <button id="firstBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">«</button>
         <button id="prevBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">‹</button>
-        <span id="pageInfo" class="text-slate-600 mx-2">Page 1 / 1</span>
-        <input id="pageJump" type="number" min="1" placeholder="Go to" class="w-16 border rounded px-2 py-1 text-sm" />
+        <span id="pageInfo" class="text-slate-600 mx-2">Page 1/1</span>
         <button id="nextBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">›</button>
         <button id="lastBtn" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">»</button>
       </div>
     </div>
   </div>
+
+  <!-- Mobile cards -->
+  <div class="mobile-cards space-y-3">
+    <div id="mobileCards"></div>
+    <div class="bg-white border rounded-xl p-3 flex items-center justify-between text-sm">
+      <button id="mFirstBtn" class="px-3 py-1 border rounded">‹‹</button>
+      <span id="mPageInfo">1/1</span>
+      <button id="mNextBtn" class="px-3 py-1 border rounded">››</button>
+    </div>
+  </div>
+
+  </section>
+
+  <!-- ============ WISHLIST TAB ============ -->
+  <section id="wishlistTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">My Wishlist</h2>
+    <div id="wishlistView" class="bg-white border rounded-xl p-4">Loading...</div>
+  </section>
+
+  <!-- ============ MY ORDERS TAB ============ -->
+  <section id="ordersTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">My Orders / Quotes</h2>
+    <div id="myOrdersView">Loading...</div>
+  </section>
+
+  <!-- ============ ADMIN ORDERS TAB ============ -->
+  <section id="adminOrdersTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">All Orders / Quotes</h2>
+    <div id="adminOrdersView">Loading...</div>
+  </section>
+
+  <!-- ============ INQUIRIES TAB ============ -->
+  <section id="inquiriesTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">WhatsApp Inquiries</h2>
+    <div id="inquiriesView">Loading...</div>
+  </section>
+
+  <!-- ============ ANALYTICS TAB ============ -->
+  <section id="analyticsTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">Analytics</h2>
+    <div id="analyticsKPIs" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white border rounded-xl p-4"><h3 class="text-sm font-semibold mb-2">Daily Activity (last 14 days)</h3><canvas id="activityChart"></canvas></div>
+      <div class="bg-white border rounded-xl p-4"><h3 class="text-sm font-semibold mb-2">Most Viewed Websites</h3><canvas id="topViewedChart"></canvas></div>
+      <div class="bg-white border rounded-xl p-4 md:col-span-2"><h3 class="text-sm font-semibold mb-2">Most Inquired Websites</h3><canvas id="topInquiredChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============ USERS TAB ============ -->
+  <section id="usersTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">Users</h2>
+    <div id="usersView" class="bg-white border rounded-xl p-4">Loading...</div>
+  </section>
+
+  <!-- ============ TRASH TAB ============ -->
+  <section id="trashTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">Trash <span class="text-sm text-slate-500 font-normal">(deleted websites can be restored)</span></h2>
+    <div id="trashView" class="bg-white border rounded-xl p-4">Loading...</div>
+  </section>
+
 </main>
+
+<!-- ============ MODALS ============ -->
 
 <!-- Cart drawer -->
 <div id="cartDrawer" class="hidden fixed inset-0 z-40">
@@ -131,12 +225,11 @@
       <button data-close class="text-slate-500 hover:text-slate-800">✕</button>
     </div>
     <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
-    <div class="border-t p-4 space-y-3">
+    <div class="border-t p-4 space-y-2">
       <div class="flex justify-between text-sm"><span>Items</span><span id="cartItemCount">0</span></div>
       <div class="flex justify-between font-semibold"><span>Total</span><span id="cartTotal">$0</span></div>
-      <button id="whatsappBtn" class="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium">
-        Contact on WhatsApp
-      </button>
+      <button id="createQuoteBtn" class="w-full py-2.5 rounded-lg bg-brand hover:bg-brand-dark text-white font-medium">Create Quote / Order</button>
+      <button id="whatsappBtn" class="w-full py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium">Contact on WhatsApp</button>
       <button id="clearCart" class="w-full py-2 rounded-lg border text-sm hover:bg-slate-50">Clear cart</button>
     </div>
   </div>
@@ -151,14 +244,12 @@
       <button class="authTab flex-1 py-1.5 rounded-lg bg-slate-100 text-sm" data-tab="register">Register</button>
     </div>
     <form id="authForm" class="space-y-3">
-      <input id="authUser" placeholder="Username" class="w-full border rounded-lg px-3 py-2" required autocomplete="username" />
-      <input id="authPass" type="password" placeholder="Password" class="w-full border rounded-lg px-3 py-2" required autocomplete="current-password" />
+      <input id="authUser" placeholder="Username" class="w-full border rounded-lg px-3 py-2" required />
+      <input id="authEmail" placeholder="Email (for register)" type="email" class="w-full border rounded-lg px-3 py-2 hidden" />
+      <input id="authPass" type="password" placeholder="Password" class="w-full border rounded-lg px-3 py-2" required />
       <div id="authErr" class="text-sm text-red-600 hidden"></div>
-      <button class="w-full py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit">
-        <span id="authSubmitText">Login</span>
-      </button>
+      <button class="w-full py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit"><span id="authSubmitText">Login</span></button>
     </form>
-    <p class="text-xs text-slate-500 mt-3 text-center">Sub-users can register to browse and request quotes.</p>
   </div>
 </div>
 
@@ -169,19 +260,54 @@
     <h3 id="editTitle" class="font-semibold mb-3">Add Website</h3>
     <form id="editForm" class="space-y-3">
       <input type="hidden" id="editId" />
-      <input id="f_website" placeholder="Website (e.g. example.com)" class="w-full border rounded-lg px-3 py-2" required />
+      <input id="f_website" placeholder="Website" class="w-full border rounded-lg px-3 py-2" required />
       <input id="f_category" placeholder="Category" class="w-full border rounded-lg px-3 py-2" />
       <div class="grid grid-cols-2 gap-3">
         <input id="f_price" type="number" step="0.01" placeholder="Price ($)" class="border rounded-lg px-3 py-2" />
-        <input id="f_traffic" type="number" placeholder="Monthly traffic" class="border rounded-lg px-3 py-2" />
+        <input id="f_traffic" type="number" placeholder="Traffic" class="border rounded-lg px-3 py-2" />
         <input id="f_dr" type="number" placeholder="DR" class="border rounded-lg px-3 py-2" />
         <input id="f_da" type="number" placeholder="DA" class="border rounded-lg px-3 py-2" />
       </div>
       <textarea id="f_notes" placeholder="Notes" class="w-full border rounded-lg px-3 py-2 h-20"></textarea>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="f_featured" /> Featured (pin to top)</label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="f_featured"/> Featured</label>
       <div class="flex gap-2 justify-end">
         <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
         <button class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bulk Edit modal -->
+<div id="bulkEditModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-md p-5 shadow-xl">
+    <h3 class="font-semibold mb-3">Bulk Edit <span id="bulkEditCount" class="text-sm font-normal text-slate-500"></span></h3>
+    <form id="bulkEditForm" class="space-y-3 text-sm">
+      <p class="text-xs text-slate-500">Leave fields blank to keep existing values.</p>
+      <input id="be_category" placeholder="New category" class="w-full border rounded-lg px-3 py-2" />
+      <input id="be_notes" placeholder="New notes (replaces existing)" class="w-full border rounded-lg px-3 py-2" />
+      <select id="be_featured" class="w-full border rounded-lg px-3 py-2">
+        <option value="">Featured: don't change</option>
+        <option value="1">Mark as Featured</option>
+        <option value="0">Unmark Featured</option>
+      </select>
+      <div class="border rounded-lg p-3">
+        <label class="text-xs font-semibold text-slate-700">Price adjustment</label>
+        <div class="flex gap-2 mt-1">
+          <select id="be_price_type" class="border rounded-lg px-2 py-2 text-xs">
+            <option value="">No change</option>
+            <option value="set">Set to</option>
+            <option value="percent">+/- %</option>
+            <option value="add">Add $</option>
+          </select>
+          <input id="be_price_value" type="number" placeholder="Value" class="flex-1 border rounded-lg px-3 py-2" />
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Examples: +10% means 10% increase, -20 with "Add $" means subtract $20</p>
+      </div>
+      <div class="flex gap-2 justify-end">
+        <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
+        <button class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white" type="submit">Apply</button>
       </div>
     </form>
   </div>
@@ -191,12 +317,12 @@
 <div id="importModal" class="hidden fixed inset-0 z-50 grid place-items-center">
   <div class="absolute inset-0 bg-black/50" data-close></div>
   <div class="relative bg-white rounded-xl w-full max-w-lg p-5 shadow-xl">
-    <h3 class="font-semibold mb-2">Import websites from CSV</h3>
-    <p class="text-xs text-slate-500 mb-3">Required column: <code>website</code>. Optional: <code>category, price, dr, da, traffic, notes, featured</code>. Existing rows with the same domain are updated.</p>
-    <input type="file" id="csvFile" accept=".csv,text/csv" class="block w-full text-sm border rounded-lg p-2 mb-3" />
-    <textarea id="csvText" placeholder="...or paste CSV here" class="w-full border rounded-lg p-2 text-sm h-32 font-mono"></textarea>
-    <label class="flex items-center gap-2 text-sm mt-3"><input type="checkbox" id="replaceMode" /> Replace all existing websites</label>
-    <div class="flex justify-between items-center mt-4">
+    <h3 class="font-semibold mb-2">Import CSV</h3>
+    <p class="text-xs text-slate-500 mb-3">Required: <code>website</code>. Optional: category, price, dr, da, traffic, notes, featured.</p>
+    <input type="file" id="csvFile" accept=".csv" class="block w-full text-sm border rounded-lg p-2 mb-3" />
+    <textarea id="csvText" placeholder="...or paste CSV" class="w-full border rounded-lg p-2 text-sm h-32 font-mono"></textarea>
+    <label class="flex items-center gap-2 text-sm mt-3"><input type="checkbox" id="replaceMode"/> Replace all</label>
+    <div class="flex justify-between mt-4">
       <a href="#" id="downloadTemplate" class="text-sm text-brand hover:underline">Download template</a>
       <div class="flex gap-2">
         <button data-close class="px-3 py-2 rounded-lg border">Cancel</button>
@@ -207,29 +333,37 @@
   </div>
 </div>
 
-<!-- Users modal -->
-<div id="usersModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+<!-- Quote/Order create modal -->
+<div id="quoteModal" class="hidden fixed inset-0 z-50 grid place-items-center">
   <div class="absolute inset-0 bg-black/50" data-close></div>
-  <div class="relative bg-white rounded-xl w-full max-w-lg p-5 shadow-xl">
-    <h3 class="font-semibold mb-3">Users</h3>
-    <div id="usersList" class="max-h-96 overflow-y-auto"></div>
+  <div class="relative bg-white rounded-xl w-full max-w-md p-5 shadow-xl">
+    <h3 class="font-semibold mb-3">Create Quote</h3>
+    <p class="text-sm text-slate-600 mb-3">Convert your cart into a tracked quote. You'll get an order number and can check status anytime in "My Orders".</p>
+    <textarea id="quoteNotes" placeholder="Optional notes for admin..." class="w-full border rounded-lg p-2 text-sm h-20 mb-3"></textarea>
+    <div class="flex gap-2 justify-end">
+      <button data-close class="px-3 py-2 rounded-lg border">Cancel</button>
+      <button id="confirmQuote" class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white">Create Quote</button>
+    </div>
   </div>
 </div>
 
-<!-- Inquiries modal -->
-<div id="inquiriesModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+<!-- Order detail modal -->
+<div id="orderModal" class="hidden fixed inset-0 z-50 grid place-items-center p-4">
   <div class="absolute inset-0 bg-black/50" data-close></div>
-  <div class="relative bg-white rounded-xl w-full max-w-2xl p-5 shadow-xl">
-    <h3 class="font-semibold mb-3">WhatsApp Inquiries</h3>
-    <div id="inquiriesList" class="max-h-[70vh] overflow-y-auto space-y-3"></div>
+  <div class="relative bg-white rounded-xl w-full max-w-2xl p-5 shadow-xl max-h-[90vh] overflow-y-auto">
+    <div id="orderDetail">Loading...</div>
   </div>
 </div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg"></div>
 
 <script>
 const state = {
   token: localStorage.getItem('token'),
   user: JSON.parse(localStorage.getItem('user') || 'null'),
   cart: JSON.parse(localStorage.getItem('cart') || '[]'),
+  wishlistIds: JSON.parse(localStorage.getItem('wishlistIds') || '[]'),
   websites: [],
   categories: new Set(),
   selected: new Set(),
@@ -237,75 +371,135 @@ const state = {
   authTab: 'login',
   page: 1,
   pageSize: parseInt(localStorage.getItem('pageSize') || '50', 10),
+  currency: localStorage.getItem('currency') || 'USD',
+  rates: { USD:1, INR:83.5, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51 },
+  currentTab: 'catalog',
 };
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
-function api(path, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+function api(path, opts={}) {
+  const headers = { 'Content-Type':'application/json', ...(opts.headers||{}) };
   if (state.token) headers.Authorization = 'Bearer ' + state.token;
   return fetch(path, { ...opts, headers }).then(async r => {
     const ct = r.headers.get('content-type') || '';
-    const data = ct.includes('json') ? await r.json().catch(() => ({})) : await r.text();
+    const data = ct.includes('json') ? await r.json().catch(()=>({})) : await r.text();
     if (!r.ok) throw new Error((data && data.error) || 'Request failed');
     return data;
   });
 }
 
-const fmtMoney = (n) => '$' + Number(n || 0).toLocaleString();
-const fmtNum = (n) => Number(n || 0).toLocaleString();
+function toast(msg, kind='info') {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = `fixed bottom-4 right-4 z-50 text-sm px-4 py-2 rounded-lg shadow-lg text-white ${kind==='error'?'bg-red-600':kind==='success'?'bg-green-600':'bg-slate-800'}`;
+  el.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.add('hidden'), 3000);
+}
 
+// Currency conversion
+const CURRENCY_SYMBOLS = { USD:'$', INR:'₹', EUR:'€', GBP:'£', CAD:'C$', AUD:'A$' };
+function fmtMoney(usd) {
+  const rate = state.rates[state.currency] || 1;
+  const v = (Number(usd)||0) * rate;
+  return CURRENCY_SYMBOLS[state.currency] + Math.round(v).toLocaleString();
+}
+const fmtNum = (n) => Number(n||0).toLocaleString();
+
+// ===== Tabs =====
+function showTab(tab) {
+  state.currentTab = tab;
+  $$('.tab-content').forEach(s => s.classList.add('hidden'));
+  $$('.tab-btn').forEach(b => b.classList.remove('active'));
+  const sec = $('#' + tab + 'Tab');
+  if (sec) sec.classList.remove('hidden');
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (btn) btn.classList.add('active');
+  if (tab === 'catalog') loadWebsites();
+  if (tab === 'wishlist') loadWishlistTab();
+  if (tab === 'orders') loadMyOrders();
+  if (tab === 'adminOrders') loadAdminOrders();
+  if (tab === 'inquiries') loadInquiries();
+  if (tab === 'analytics') loadAnalytics();
+  if (tab === 'users') loadUsersTab();
+  if (tab === 'trash') loadTrash();
+}
+$$('.tab-btn').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// ===== Header / User =====
 function renderUserArea() {
   const el = $('#userArea');
+  const isAdmin = state.user && state.user.role === 'admin';
+  const isUser = state.user && state.user.role === 'user';
   if (state.user) {
-    el.innerHTML = `
-      <div class="flex items-center gap-2 text-sm">
-        <span class="badge ${state.user.role === 'admin' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}">${state.user.role}</span>
-        <span class="text-slate-600">${state.user.username}</span>
-        <button id="logoutBtn" class="text-slate-500 hover:text-red-600 text-xs underline">Logout</button>
-      </div>`;
+    el.innerHTML = `<div class="flex items-center gap-2 text-sm">
+      <span class="badge ${isAdmin?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-700'}">${state.user.role}</span>
+      <span class="text-slate-600">${state.user.username}</span>
+      <button id="logoutBtn" class="text-slate-500 hover:text-red-600 text-xs underline">Logout</button>
+    </div>`;
     $('#logoutBtn').onclick = () => {
       localStorage.removeItem('token'); localStorage.removeItem('user');
-      state.token = null; state.user = null;
-      state.selected.clear();
-      renderUserArea(); renderRows();
-      $('#adminBar').classList.add('hidden');
-      $('#statsBar').classList.add('hidden');
-      $('#selectAllTh').classList.add('hidden');
+      state.token=null; state.user=null; state.selected.clear(); state.wishlistIds=[];
+      localStorage.removeItem('wishlistIds');
+      renderUserArea(); showTab('catalog'); renderRows();
     };
   } else {
     el.innerHTML = `<button id="loginBtn" class="px-3 py-1.5 text-sm rounded-lg bg-brand text-white hover:bg-brand-dark">Login / Register</button>`;
-    $('#loginBtn').onclick = () => openAuth();
+    $('#loginBtn').onclick = openAuth;
   }
-  const isAdmin = state.user && state.user.role === 'admin';
   $('#adminBar').classList.toggle('hidden', !isAdmin);
   $('#statsBar').classList.toggle('hidden', !isAdmin);
   $('#selectAllTh').classList.toggle('hidden', !isAdmin);
+  $('#viewsCol').classList.toggle('hidden', !isAdmin);
+  $('#tabAdminOrders').classList.toggle('hidden', !isAdmin);
+  $('#tabInquiries').classList.toggle('hidden', !isAdmin);
+  $('#tabAnalytics').classList.toggle('hidden', !isAdmin);
+  $('#tabUsers').classList.toggle('hidden', !isAdmin);
+  $('#tabTrash').classList.toggle('hidden', !isAdmin);
+  $('#tabWishlist').classList.toggle('hidden', !isUser && !isAdmin);
+  $('#tabOrders').classList.toggle('hidden', !isUser);
+  $('#wishlistBtn').classList.toggle('hidden', !state.user);
   if (isAdmin) loadStats();
+  if (state.user) loadWishlist();
 }
 
 async function loadStats() {
-  try {
-    const s = await api('/api/stats');
+  try { const s = await api('/api/stats');
     $('#sTotal').textContent = s.total;
     $('#sAvg').textContent = fmtMoney(s.avgPrice);
     $('#sRange').textContent = `${fmtMoney(s.minPrice)} - ${fmtMoney(s.maxPrice)}`;
     $('#sDR').textContent = s.avgDR;
     $('#sDA').textContent = s.avgDA;
-  } catch {}
+  } catch{}
 }
 
+async function loadTrending() {
+  try {
+    const t = await api('/api/websites/trending?limit=5');
+    if (t.length === 0) { $('#trendingBar').classList.add('hidden'); return; }
+    $('#trendingList').innerHTML = t.map(w =>
+      `<span class="badge bg-orange-100 text-orange-700">${w.website} · ${w.views} views</span>`
+    ).join('');
+    $('#trendingBar').classList.remove('hidden');
+  } catch{}
+}
+
+async function loadRates() {
+  try { const r = await api('/api/rates'); if (r.rates) state.rates = r.rates; } catch{}
+}
+
+// ===== Catalog =====
 async function loadWebsites() {
   state.websites = await api('/api/websites');
   state.categories = new Set(state.websites.map(w => w.category).filter(Boolean));
   const sel = $('#categoryFilter');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">All categories</option>' +
-    [...state.categories].sort().map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.innerHTML = '<option value="">All categories</option>' + [...state.categories].sort().map(c => `<option value="${c}">${c}</option>`).join('');
   sel.value = cur;
   state.page = 1;
   renderRows();
+  loadTrending();
 }
 
 function filtered() {
@@ -320,23 +514,27 @@ function filtered() {
     if (!isNaN(max) && w.price > max) return false;
     return true;
   });
-  const sort = $('#sortBy').value;
   const cmp = {
-    featured: (a,b) => (b.featured||0) - (a.featured||0) || b.id - a.id,
-    id_desc: (a,b) => b.id - a.id,
-    price_asc: (a,b) => a.price - b.price,
-    price_desc: (a,b) => b.price - a.price,
-    dr_desc: (a,b) => b.dr - a.dr,
-    da_desc: (a,b) => b.da - a.da,
-    traffic_desc: (a,b) => b.traffic - a.traffic,
-  }[sort];
+    featured:(a,b)=>(b.featured||0)-(a.featured||0)||b.id-a.id,
+    id_desc:(a,b)=>b.id-a.id,
+    views_desc:(a,b)=>(b.views||0)-(a.views||0),
+    price_asc:(a,b)=>a.price-b.price, price_desc:(a,b)=>b.price-a.price,
+    dr_desc:(a,b)=>b.dr-a.dr, da_desc:(a,b)=>b.da-a.da,
+    traffic_desc:(a,b)=>b.traffic-a.traffic
+  }[$('#sortBy').value];
   rows.sort(cmp);
   return rows;
 }
 
 function whatsappLinkSingle(w) {
-  const msg = `Hi! I'm interested in ${w.website} (${w.category || 'N/A'}) priced at ${fmtMoney(w.price)}.`;
+  const msg = `Hi! I'm interested in ${w.website} (${w.category||'N/A'}) priced at ${fmtMoney(w.price)}.`;
   return `https://wa.me/${state.whatsapp}?text=${encodeURIComponent(msg)}`;
+}
+
+function trendingBadge(w) {
+  if ((w.views||0) >= 50) return '<span class="badge bg-red-100 text-red-700 ml-1">🔥 HOT</span>';
+  if ((w.views||0) >= 10) return '<span class="badge bg-orange-100 text-orange-700 ml-1">↑ Trending</span>';
+  return '';
 }
 
 function renderRows() {
@@ -344,56 +542,48 @@ function renderRows() {
   const total = all.length;
   const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
   if (state.page > totalPages) state.page = totalPages;
-  if (state.page < 1) state.page = 1;
-  const start = (state.page - 1) * state.pageSize;
-  const end = start + state.pageSize;
-  const rows = all.slice(start, end);
+  const start = (state.page-1) * state.pageSize;
+  const rows = all.slice(start, start + state.pageSize);
   const isAdmin = state.user && state.user.role === 'admin';
+
   $('#empty').classList.toggle('hidden', rows.length > 0);
+  $('#resultCount').textContent = total === 0 ? '0 results' : `Showing ${(start+1).toLocaleString()}–${Math.min(start+state.pageSize, total).toLocaleString()} of ${total.toLocaleString()}`;
+  $('#pageInfo').textContent = `Page ${state.page}/${totalPages}`;
+  $('#mPageInfo').textContent = `${state.page}/${totalPages}`;
+  ['#prevBtn','#firstBtn','#mFirstBtn'].forEach(s => $(s).disabled = state.page <= 1);
+  ['#nextBtn','#lastBtn','#mNextBtn'].forEach(s => $(s).disabled = state.page >= totalPages);
 
-  // Result counts and pagination labels
-  $('#resultCount').textContent = total === 0
-    ? '0 results'
-    : `Showing ${(start + 1).toLocaleString()}–${Math.min(end, total).toLocaleString()} of ${total.toLocaleString()}`;
-  if (isAdmin) {
-    const sumP = all.reduce((s,w) => s + (w.price||0), 0);
-    $('#resultTotal').textContent = `Filtered value: ${fmtMoney(sumP)}`;
-    $('#resultTotal').classList.remove('hidden');
-  } else {
-    $('#resultTotal').classList.add('hidden');
-  }
-  $('#pageInfo').textContent = `Page ${state.page} / ${totalPages}`;
-  $('#prevBtn').disabled = state.page <= 1;
-  $('#firstBtn').disabled = state.page <= 1;
-  $('#nextBtn').disabled = state.page >= totalPages;
-  $('#lastBtn').disabled = state.page >= totalPages;
-
+  // Desktop table
   $('#rows').innerHTML = rows.map(w => {
     const inCart = state.cart.some(c => c.id === w.id);
+    const inWish = state.wishlistIds.includes(w.id);
     const sel = state.selected.has(w.id) ? 'checked' : '';
     return `
-      <tr class="border-t hover:bg-slate-50 ${w.featured ? 'bg-amber-50/40' : ''}">
+      <tr class="border-t hover:bg-slate-50 ${w.featured?'bg-amber-50/40':''}">
         ${isAdmin ? `<td class="text-center px-3 py-3"><input type="checkbox" class="rowSel" data-id="${w.id}" ${sel}/></td>` : ''}
         <td class="px-4 py-3 font-medium">
-          ${w.featured ? '<span class="star mr-1" title="Featured">★</span>' : ''}
-          <a href="https://${(w.website||'').replace(/^https?:\/\//,'')}" target="_blank" class="text-brand hover:underline">${w.website}</a>
+          ${w.featured?'<span class="star mr-1">★</span>':''}
+          <a href="https://${(w.website||'').replace(/^https?:\/\//,'')}" target="_blank" class="text-brand hover:underline" onclick="trackView(${w.id})">${w.website}</a>
+          ${trendingBadge(w)}
         </td>
-        <td class="px-4 py-3"><span class="badge bg-slate-100 text-slate-700">${w.category || '-'}</span></td>
+        <td class="px-4 py-3"><span class="badge bg-slate-100 text-slate-700">${w.category||'-'}</span></td>
         <td class="px-4 py-3 text-right font-semibold">${fmtMoney(w.price)}</td>
-        <td class="px-4 py-3 text-right">${w.dr || '-'}</td>
-        <td class="px-4 py-3 text-right">${w.da || '-'}</td>
+        <td class="px-4 py-3 text-right">${w.dr||'-'}</td>
+        <td class="px-4 py-3 text-right">${w.da||'-'}</td>
         <td class="px-4 py-3 text-right text-slate-600">${fmtNum(w.traffic)}</td>
-        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${(w.notes||'').replace(/"/g,'&quot;')}">${w.notes || ''}</td>
+        ${isAdmin ? `<td class="px-4 py-3 text-right text-slate-500">${fmtNum(w.views||0)}</td>` : ''}
+        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${(w.notes||'').replace(/"/g,'&quot;')}">${w.notes||''}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${isAdmin
             ? `<button class="text-brand hover:underline text-xs mr-2" onclick="editRow(${w.id})">Edit</button>
                <button class="text-red-600 hover:underline text-xs" onclick="deleteRow(${w.id})">Delete</button>`
-            : `<a href="${whatsappLinkSingle(w)}" target="_blank" class="inline-block px-2 py-1 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 mr-1">WhatsApp</a>
-               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart ? 'bg-slate-200 text-slate-600' : 'bg-brand text-white hover:bg-brand-dark'}" onclick="toggleCart(${w.id})">${inCart ? 'In cart' : '+ Add'}</button>`
-          }
+            : `<button onclick="toggleWishlist(${w.id})" class="text-xs mr-1 ${inWish?'text-red-500':'text-slate-400'} hover:scale-110">${inWish?'♥':'♡'}</button>
+               <a href="${whatsappLinkSingle(w)}" target="_blank" onclick="trackView(${w.id})" class="inline-block px-2 py-1 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 mr-1">WhatsApp</a>
+               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart?'bg-slate-200 text-slate-600':'bg-brand text-white hover:bg-brand-dark'}" onclick="toggleCart(${w.id})">${inCart?'In cart':'+ Add'}</button>`}
         </td>
       </tr>`;
   }).join('');
+
   if (isAdmin) {
     $$('.rowSel').forEach(cb => cb.addEventListener('change', () => {
       const id = Number(cb.dataset.id);
@@ -402,283 +592,473 @@ function renderRows() {
     }));
   }
   updateSelected();
+
+  // Mobile cards
+  $('#mobileCards').innerHTML = rows.map(w => {
+    const inCart = state.cart.some(c => c.id === w.id);
+    const inWish = state.wishlistIds.includes(w.id);
+    return `
+      <div class="bg-white border rounded-xl p-4 ${w.featured?'border-amber-300 bg-amber-50/30':''}">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <div class="font-semibold text-base">${w.featured?'<span class="star">★</span> ':''}<a href="https://${(w.website||'').replace(/^https?:\/\//,'')}" target="_blank" class="text-brand hover:underline" onclick="trackView(${w.id})">${w.website}</a></div>
+            <div class="text-xs text-slate-500 mt-1">${w.category||'-'}${trendingBadge(w)}</div>
+          </div>
+          <div class="text-lg font-bold">${fmtMoney(w.price)}</div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-xs text-slate-600 mb-3 bg-slate-50 rounded p-2">
+          <div><span class="text-slate-400">DR</span> ${w.dr||'-'}</div>
+          <div><span class="text-slate-400">DA</span> ${w.da||'-'}</div>
+          <div><span class="text-slate-400">Traffic</span> ${fmtNum(w.traffic)}</div>
+        </div>
+        ${w.notes?`<p class="text-xs text-slate-600 mb-3">${w.notes}</p>`:''}
+        ${state.user && state.user.role === 'user' ? `
+        <div class="flex gap-2">
+          <button onclick="toggleWishlist(${w.id})" class="px-3 py-2 text-sm border rounded ${inWish?'text-red-500 border-red-300':'text-slate-500'}">${inWish?'♥':'♡'}</button>
+          <a href="${whatsappLinkSingle(w)}" target="_blank" class="flex-1 text-center px-3 py-2 text-sm rounded border border-green-600 text-green-700">WhatsApp</a>
+          <button onclick="toggleCart(${w.id})" class="flex-1 px-3 py-2 text-sm rounded ${inCart?'bg-slate-200':'bg-brand text-white'}">${inCart?'In cart':'+ Cart'}</button>
+        </div>` : ''}
+      </div>`;
+  }).join('');
 }
 
 function updateSelected() {
-  $('#selCount').textContent = state.selected.size;
+  $('#bulkCount').textContent = state.selected.size;
   $('#bulkDeleteBtn').classList.toggle('hidden', state.selected.size === 0);
+  $('#bulkEditBtn').classList.toggle('hidden', state.selected.size === 0);
 }
 
+// View tracking (debounced - track once per page load per website)
+const trackedViews = new Set();
+function trackView(id) {
+  if (trackedViews.has(id)) return;
+  trackedViews.add(id);
+  fetch('/api/websites/' + id + '/view', { method:'POST' }).catch(()=>{});
+}
+window.trackView = trackView;
+
+// Cart
 function toggleCart(id) {
   if (!state.user) { openAuth(); return; }
   const idx = state.cart.findIndex(c => c.id === id);
   if (idx >= 0) state.cart.splice(idx, 1);
-  else {
-    const w = state.websites.find(x => x.id === id);
-    state.cart.push({ id: w.id, website: w.website, price: w.price });
-  }
+  else { const w = state.websites.find(x => x.id === id); state.cart.push({ id:w.id, website:w.website, price:w.price }); }
   saveCart(); renderRows(); renderCart();
 }
 window.toggleCart = toggleCart;
-
-function saveCart() {
-  localStorage.setItem('cart', JSON.stringify(state.cart));
-  $('#cartCount').textContent = state.cart.length;
-}
-
+function saveCart() { localStorage.setItem('cart', JSON.stringify(state.cart)); $('#cartCount').textContent = state.cart.length; }
 function renderCart() {
   $('#cartCount').textContent = state.cart.length;
   $('#cartItemCount').textContent = state.cart.length;
-  const total = state.cart.reduce((s, c) => s + Number(c.price || 0), 0);
-  $('#cartTotal').textContent = fmtMoney(total);
+  $('#cartTotal').textContent = fmtMoney(state.cart.reduce((s,c)=>s+Number(c.price||0),0));
   $('#cartItems').innerHTML = state.cart.length === 0
     ? '<p class="text-sm text-slate-500 text-center py-8">Your cart is empty.</p>'
-    : state.cart.map(c => `
-        <div class="flex items-center justify-between border rounded-lg p-3">
-          <div>
-            <div class="font-medium text-sm">${c.website}</div>
-            <div class="text-xs text-slate-500">${fmtMoney(c.price)}</div>
-          </div>
-          <button class="text-red-500 text-xs" onclick="toggleCart(${c.id})">Remove</button>
-        </div>`).join('');
+    : state.cart.map(c => `<div class="flex items-center justify-between border rounded-lg p-3">
+        <div><div class="font-medium text-sm">${c.website}</div><div class="text-xs text-slate-500">${fmtMoney(c.price)}</div></div>
+        <button class="text-red-500 text-xs" onclick="toggleCart(${c.id})">Remove</button></div>`).join('');
 }
 
-// Modals
+// Wishlist
+async function loadWishlist() {
+  if (!state.user) return;
+  try {
+    const list = await api('/api/wishlist');
+    state.wishlistIds = list.map(w => w.id);
+    localStorage.setItem('wishlistIds', JSON.stringify(state.wishlistIds));
+    $('#wishlistCount').textContent = state.wishlistIds.length;
+  } catch{}
+}
+async function toggleWishlist(id) {
+  if (!state.user) { openAuth(); return; }
+  const has = state.wishlistIds.includes(id);
+  try {
+    if (has) { await api('/api/wishlist/'+id, {method:'DELETE'}); state.wishlistIds = state.wishlistIds.filter(x=>x!==id); }
+    else { await api('/api/wishlist/'+id, {method:'POST'}); state.wishlistIds.push(id); }
+    localStorage.setItem('wishlistIds', JSON.stringify(state.wishlistIds));
+    $('#wishlistCount').textContent = state.wishlistIds.length;
+    renderRows();
+    if (state.currentTab === 'wishlist') loadWishlistTab();
+  } catch(e) { toast(e.message, 'error'); }
+}
+window.toggleWishlist = toggleWishlist;
+
+async function loadWishlistTab() {
+  try {
+    const list = await api('/api/wishlist');
+    if (list.length === 0) { $('#wishlistView').innerHTML = '<p class="text-slate-500 text-center py-8">Your wishlist is empty. Click ♡ next to any website to save it here.</p>'; return; }
+    $('#wishlistView').innerHTML = `<table class="w-full text-sm">
+      <thead class="bg-slate-100"><tr><th class="text-left p-3">Website</th><th class="text-left p-3">Category</th><th class="text-right p-3">Price</th><th class="text-right p-3">DR/DA</th><th></th></tr></thead>
+      <tbody>${list.map(w => `<tr class="border-t">
+        <td class="p-3"><a href="https://${w.website}" target="_blank" class="text-brand hover:underline">${w.website}</a></td>
+        <td class="p-3">${w.category||'-'}</td>
+        <td class="p-3 text-right font-semibold">${fmtMoney(w.price)}</td>
+        <td class="p-3 text-right">${w.dr||'-'}/${w.da||'-'}</td>
+        <td class="p-3 text-right"><button class="text-red-500 text-xs mr-2" onclick="toggleWishlist(${w.id})">Remove</button>
+          <button class="text-brand text-xs" onclick="toggleCart(${w.id})">+ Cart</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch(e) { $('#wishlistView').textContent = e.message; }
+}
+
+// Quote/Order
+$('#createQuoteBtn').onclick = () => {
+  if (!state.user) { openAuth(); return; }
+  if (state.cart.length === 0) { toast('Cart is empty', 'error'); return; }
+  $('#quoteNotes').value = '';
+  $('#quoteModal').classList.remove('hidden');
+};
+$('#confirmQuote').onclick = async () => {
+  try {
+    const r = await api('/api/orders', { method:'POST', body: JSON.stringify({ items: state.cart, currency: state.currency, notes: $('#quoteNotes').value }) });
+    state.cart = []; saveCart(); renderCart();
+    $('#quoteModal').classList.add('hidden');
+    $('#cartDrawer').classList.add('hidden');
+    toast(`Quote ${r.order_number} created!`, 'success');
+    showTab('orders');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+async function loadMyOrders() {
+  try {
+    const list = await api('/api/orders');
+    if (list.length === 0) { $('#myOrdersView').innerHTML = '<div class="bg-white border rounded-xl p-8 text-center text-slate-500">You have no orders yet. Add websites to your cart and click "Create Quote".</div>'; return; }
+    $('#myOrdersView').innerHTML = '<div class="space-y-3">' + list.map(o => `
+      <div class="bg-white border rounded-xl p-4 hover:shadow cursor-pointer" onclick="showOrder(${o.id})">
+        <div class="flex justify-between items-start mb-2">
+          <div><div class="font-semibold">${o.order_number}</div><div class="text-xs text-slate-500">${new Date(o.created_at).toLocaleString()}</div></div>
+          <span class="badge status-${o.status}">${o.status.toUpperCase()}</span>
+        </div>
+        <div class="text-sm text-slate-600">${o.items.length} items · <span class="font-semibold">${fmtMoney(o.total)}</span></div>
+      </div>`).join('') + '</div>';
+  } catch(e) { $('#myOrdersView').textContent = e.message; }
+}
+
+async function loadAdminOrders() {
+  try {
+    const list = await api('/api/orders');
+    if (list.length === 0) { $('#adminOrdersView').innerHTML = '<div class="bg-white border rounded-xl p-8 text-center text-slate-500">No orders yet.</div>'; return; }
+    $('#adminOrdersView').innerHTML = `<div class="bg-white border rounded-xl overflow-hidden"><table class="w-full text-sm">
+      <thead class="bg-slate-100"><tr><th class="text-left p-3">Order</th><th class="text-left p-3">Customer</th><th class="text-left p-3">Date</th><th class="text-right p-3">Total</th><th class="text-left p-3">Status</th><th></th></tr></thead>
+      <tbody>${list.map(o => `<tr class="border-t hover:bg-slate-50 cursor-pointer" onclick="showOrder(${o.id})">
+        <td class="p-3 font-medium">${o.order_number}</td>
+        <td class="p-3">${o.username}</td>
+        <td class="p-3 text-xs text-slate-500">${new Date(o.created_at).toLocaleString()}</td>
+        <td class="p-3 text-right font-semibold">${fmtMoney(o.total)}</td>
+        <td class="p-3"><span class="badge status-${o.status}">${o.status.toUpperCase()}</span></td>
+        <td class="p-3 text-right text-xs">${o.items.length} items →</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  } catch(e) { $('#adminOrdersView').textContent = e.message; }
+}
+
+async function showOrder(id) {
+  try {
+    const o = await api('/api/orders/'+id);
+    const isAdmin = state.user && state.user.role === 'admin';
+    $('#orderDetail').innerHTML = `
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-xl font-semibold">${o.order_number}</h2>
+          <div class="text-sm text-slate-500">${o.username} · ${new Date(o.created_at).toLocaleString()}</div>
+        </div>
+        <button data-close class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+      <div class="mb-4 flex items-center gap-3">
+        <span class="badge status-${o.status} text-base">${o.status.toUpperCase()}</span>
+        ${isAdmin ? `<select id="changeStatus" class="border rounded px-2 py-1 text-sm">
+          ${['pending','approved','paid','delivered','cancelled'].map(s => `<option value="${s}" ${s===o.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <button onclick="updateOrderStatus(${o.id})" class="px-3 py-1 bg-brand text-white rounded text-sm">Update</button>` : ''}
+      </div>
+      ${o.notes ? `<div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm"><b>Customer note:</b> ${o.notes}</div>` : ''}
+      <h3 class="font-semibold mb-2">Items</h3>
+      <table class="w-full text-sm border rounded overflow-hidden mb-4">
+        <thead class="bg-slate-100"><tr><th class="text-left p-2">Website</th><th class="text-right p-2">Price</th></tr></thead>
+        <tbody>${o.items.map(i => `<tr class="border-t"><td class="p-2">${i.website}</td><td class="p-2 text-right">${fmtMoney(i.price)}</td></tr>`).join('')}
+        <tr class="border-t font-semibold bg-slate-50"><td class="p-2">Total</td><td class="p-2 text-right">${fmtMoney(o.total)}</td></tr></tbody>
+      </table>
+      <h3 class="font-semibold mb-2">Status History</h3>
+      <ul class="text-sm space-y-1">${o.status_history.map(h => `<li>• <span class="badge status-${h.status}">${h.status}</span> by ${h.by} on ${new Date(h.at).toLocaleString()}${h.note?` - ${h.note}`:''}</li>`).join('')}</ul>
+      ${isAdmin ? `<div class="mt-4 text-right"><button onclick="deleteOrder(${o.id})" class="text-red-600 text-sm">Delete order</button></div>` : ''}
+    `;
+    $('#orderModal').classList.remove('hidden');
+  } catch(e) { toast(e.message, 'error'); }
+}
+window.showOrder = showOrder;
+window.updateOrderStatus = async (id) => {
+  try {
+    const status = $('#changeStatus').value;
+    await api('/api/orders/'+id+'/status', { method:'PUT', body: JSON.stringify({ status }) });
+    toast('Status updated', 'success');
+    showOrder(id);
+    if (state.currentTab === 'adminOrders') loadAdminOrders();
+  } catch(e) { toast(e.message, 'error'); }
+};
+window.deleteOrder = async (id) => {
+  if (!confirm('Delete this order?')) return;
+  await api('/api/orders/'+id, { method:'DELETE' });
+  $('#orderModal').classList.add('hidden');
+  loadAdminOrders();
+};
+
+// Inquiries
+async function loadInquiries() {
+  try {
+    const list = await api('/api/inquiries');
+    if (list.length === 0) { $('#inquiriesView').innerHTML = '<div class="bg-white border rounded-xl p-8 text-center text-slate-500">No inquiries yet.</div>'; return; }
+    $('#inquiriesView').innerHTML = '<div class="space-y-3">' + list.map(i => `
+      <div class="bg-white border rounded-xl p-4">
+        <div class="flex justify-between text-sm mb-2">
+          <div><b>${i.username}</b> <span class="text-slate-500 text-xs">- ${new Date(i.created_at).toLocaleString()}</span></div>
+          <div class="font-semibold">${fmtMoney(i.total)}</div>
+        </div>
+        <ul class="text-sm text-slate-600 list-disc list-inside">${i.items.map(it => `<li>${it.website} - ${fmtMoney(it.price)}</li>`).join('')}</ul>
+        <div class="text-right mt-2"><button class="text-red-600 text-xs" onclick="delInq(${i.id})">Delete</button></div>
+      </div>`).join('') + '</div>';
+  } catch(e) { $('#inquiriesView').textContent = e.message; }
+}
+window.delInq = async (id) => { await api('/api/inquiries/'+id, {method:'DELETE'}); loadInquiries(); };
+
+// Analytics
+let charts = {};
+async function loadAnalytics() {
+  try {
+    const a = await api('/api/analytics?days=14');
+    $('#analyticsKPIs').innerHTML = [
+      ['Total Users', a.summary.totalUsers],
+      ['Total Websites', a.summary.totalWebsites],
+      ['Total Inquiries', a.summary.totalInquiries],
+      ['Total Orders', a.summary.totalOrders],
+      ['Conversion Rate', a.summary.conversionRate + '%']
+    ].map(([k,v]) => `<div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">${k}</div><div class="text-2xl font-semibold mt-1">${v}</div></div>`).join('');
+    Object.values(charts).forEach(c => c.destroy());
+    charts.activity = new Chart($('#activityChart'), {
+      type:'line',
+      data:{ labels: a.series.map(s=>s.date.slice(5)),
+        datasets:[
+          {label:'Signups', data:a.series.map(s=>s.signups), borderColor:'#16a34a', tension:0.3},
+          {label:'Inquiries', data:a.series.map(s=>s.inquiries), borderColor:'#3b82f6', tension:0.3},
+          {label:'Orders', data:a.series.map(s=>s.orders), borderColor:'#f59e0b', tension:0.3},
+          {label:'Views', data:a.series.map(s=>s.views), borderColor:'#94a3b8', tension:0.3, hidden:true}
+        ]},
+      options:{ responsive:true, plugins:{legend:{position:'bottom'}} }
+    });
+    charts.topViewed = new Chart($('#topViewedChart'), {
+      type:'bar',
+      data:{ labels: a.topViewed.map(x=>x.website), datasets:[{label:'Views', data:a.topViewed.map(x=>x.views), backgroundColor:'#16a34a'}] },
+      options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} }
+    });
+    charts.topInquired = new Chart($('#topInquiredChart'), {
+      type:'bar',
+      data:{ labels: a.topInquired.map(x=>x.website), datasets:[{label:'Inquiries', data:a.topInquired.map(x=>x.count), backgroundColor:'#f59e0b'}] },
+      options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} }
+    });
+  } catch(e) { $('#analyticsKPIs').textContent = e.message; }
+}
+
+// Users
+async function loadUsersTab() {
+  try {
+    const users = await api('/api/users');
+    $('#usersView').innerHTML = `<table class="w-full text-sm">
+      <thead class="bg-slate-100"><tr><th class="text-left p-2">User</th><th class="text-left p-2">Role</th><th class="text-left p-2">Email</th><th class="text-left p-2">Verified</th><th class="text-left p-2">Joined</th><th class="text-left p-2">Last login</th><th></th></tr></thead>
+      <tbody>${users.map(u => `<tr class="border-t">
+        <td class="p-2 font-medium">${u.username}</td>
+        <td class="p-2"><span class="badge ${u.role==='admin'?'bg-amber-100 text-amber-700':'bg-slate-100'}">${u.role}</span></td>
+        <td class="p-2 text-slate-500">${u.email||'-'}</td>
+        <td class="p-2">${u.email_verified?'✓':'-'}</td>
+        <td class="p-2 text-slate-500 text-xs">${new Date(u.created_at).toLocaleString()}</td>
+        <td class="p-2 text-slate-500 text-xs">${u.last_login?new Date(u.last_login).toLocaleString():'never'}</td>
+        <td class="p-2 text-right">${u.role!=='admin'?`<button class="text-red-600 text-xs" onclick="delUser(${u.id})">Delete</button>`:''}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch(e) { $('#usersView').textContent = e.message; }
+}
+window.delUser = async (id) => { if (confirm('Delete user?')) { await api('/api/users/'+id, {method:'DELETE'}); loadUsersTab(); } };
+
+// Trash
+async function loadTrash() {
+  try {
+    const all = await api('/api/websites?deleted=1');
+    if (all.length === 0) { $('#trashView').innerHTML = '<p class="text-slate-500 text-center py-8">Trash is empty.</p>'; return; }
+    $('#trashView').innerHTML = `<table class="w-full text-sm">
+      <thead class="bg-slate-100"><tr><th class="text-left p-3">Website</th><th class="text-left p-3">Deleted</th><th></th></tr></thead>
+      <tbody>${all.map(w => `<tr class="border-t">
+        <td class="p-3">${w.website}</td>
+        <td class="p-3 text-slate-500 text-xs">${new Date(w.deleted_at).toLocaleString()}</td>
+        <td class="p-3 text-right">
+          <button class="text-brand text-xs mr-2" onclick="restoreSite(${w.id})">Restore</button>
+          <button class="text-red-600 text-xs" onclick="permDelete(${w.id})">Delete forever</button>
+        </td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch(e) { $('#trashView').textContent = e.message; }
+}
+window.restoreSite = async (id) => { await api('/api/websites/'+id+'/restore', {method:'POST'}); loadTrash(); toast('Restored', 'success'); };
+window.permDelete = async (id) => { if (confirm('Delete forever? This cannot be undone.')) { await api('/api/websites/'+id+'/permanent', {method:'DELETE'}); loadTrash(); } };
+
+// Auth modal
 function openAuth() { $('#authModal').classList.remove('hidden'); setAuthTab('login'); }
 function setAuthTab(tab) {
   state.authTab = tab;
-  $$('.authTab').forEach(b => {
-    const active = b.dataset.tab === tab;
-    b.className = `authTab flex-1 py-1.5 rounded-lg ${active ? 'bg-brand text-white' : 'bg-slate-100'} text-sm`;
-  });
+  $$('.authTab').forEach(b => { b.className = `authTab flex-1 py-1.5 rounded-lg ${b.dataset.tab===tab?'bg-brand text-white':'bg-slate-100'} text-sm`; });
   $('#authSubmitText').textContent = tab === 'login' ? 'Login' : 'Create account';
+  $('#authEmail').classList.toggle('hidden', tab !== 'register');
 }
-
 document.addEventListener('click', (e) => {
-  if (e.target.matches('[data-close]')) {
-    e.target.closest('.fixed')?.classList.add('hidden');
-  }
+  if (e.target.matches('[data-close]')) e.target.closest('.fixed')?.classList.add('hidden');
   if (e.target.classList.contains('authTab')) setAuthTab(e.target.dataset.tab);
 });
-
 $('#authForm').onsubmit = async (e) => {
   e.preventDefault();
   $('#authErr').classList.add('hidden');
   try {
     const path = state.authTab === 'login' ? '/api/login' : '/api/register';
-    const data = await api(path, {
-      method: 'POST',
-      body: JSON.stringify({ username: $('#authUser').value.trim(), password: $('#authPass').value })
-    });
+    const body = { username: $('#authUser').value.trim(), password: $('#authPass').value };
+    if (state.authTab === 'register') body.email = $('#authEmail').value.trim();
+    const data = await api(path, { method:'POST', body: JSON.stringify(body) });
     state.token = data.token; state.user = data.user;
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    $('#authModal').classList.add('hidden');
-    $('#authForm').reset();
+    $('#authModal').classList.add('hidden'); $('#authForm').reset();
     renderUserArea(); renderRows();
-  } catch (err) {
-    $('#authErr').textContent = err.message;
-    $('#authErr').classList.remove('hidden');
-  }
+    toast(state.authTab==='login'?'Welcome back':'Account created', 'success');
+  } catch(err) { $('#authErr').textContent = err.message; $('#authErr').classList.remove('hidden'); }
 };
 
+// Cart drawer + WhatsApp
 $('#cartBtn').onclick = () => { renderCart(); $('#cartDrawer').classList.remove('hidden'); };
 $('#clearCart').onclick = () => { state.cart = []; saveCart(); renderCart(); renderRows(); };
-
 $('#whatsappBtn').onclick = async () => {
-  if (state.cart.length === 0) { alert('Your cart is empty.'); return; }
-  const total = state.cart.reduce((s, c) => s + Number(c.price || 0), 0);
-  try {
-    await api('/api/inquiries', { method: 'POST', body: JSON.stringify({ items: state.cart, total }) });
-  } catch {}
-  const lines = state.cart.map((c, i) => `${i+1}. ${c.website} - ${fmtMoney(c.price)}`).join('\n');
-  const msg = `Hi! I'd like to inquire about these websites:\n\n${lines}\n\nTotal: ${fmtMoney(total)}\n\nMy username: ${state.user ? state.user.username : 'guest'}`;
-  const url = `https://wa.me/${state.whatsapp}?text=${encodeURIComponent(msg)}`;
-  window.open(url, '_blank');
+  if (state.cart.length === 0) { toast('Cart empty', 'error'); return; }
+  const total = state.cart.reduce((s,c)=>s+Number(c.price||0),0);
+  try { await api('/api/inquiries', { method:'POST', body: JSON.stringify({ items: state.cart, total }) }); } catch{}
+  const lines = state.cart.map((c,i) => `${i+1}. ${c.website} - ${fmtMoney(c.price)}`).join('\n');
+  const msg = `Hi! I'd like to inquire about these websites:\n\n${lines}\n\nTotal: ${fmtMoney(total)}\n\nMy username: ${state.user?state.user.username:'guest'}`;
+  window.open(`https://wa.me/${state.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
-// Filters reset to page 1 on change
-['search','categoryFilter','sortBy','minPrice','maxPrice'].forEach(id => {
-  $('#' + id).addEventListener('input', () => { state.page = 1; renderRows(); });
+// Wishlist button
+$('#wishlistBtn').onclick = () => showTab('wishlist');
+
+// Currency
+$('#currency').value = state.currency;
+$('#currency').addEventListener('change', () => {
+  state.currency = $('#currency').value;
+  localStorage.setItem('currency', state.currency);
+  renderRows(); renderCart(); loadStats();
 });
 
-// Pagination controls
+// Filters
+['search','categoryFilter','sortBy','minPrice','maxPrice'].forEach(id =>
+  $('#'+id).addEventListener('input', () => { state.page=1; renderRows(); }));
 $('#pageSize').value = state.pageSize;
-$('#pageSize').addEventListener('change', () => {
-  state.pageSize = parseInt($('#pageSize').value, 10);
-  localStorage.setItem('pageSize', state.pageSize);
-  state.page = 1;
-  renderRows();
-});
-$('#prevBtn').onclick = () => { state.page--; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); };
-$('#nextBtn').onclick = () => { state.page++; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); };
-$('#firstBtn').onclick = () => { state.page = 1; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); };
-$('#lastBtn').onclick = () => {
-  const total = filtered().length;
-  state.page = Math.max(1, Math.ceil(total / state.pageSize));
-  renderRows(); window.scrollTo({top:0, behavior:'smooth'});
-};
-$('#pageJump').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    const v = parseInt($('#pageJump').value, 10);
-    if (!isNaN(v)) { state.page = v; renderRows(); window.scrollTo({top:0, behavior:'smooth'}); }
-    $('#pageJump').value = '';
-  }
-});
+$('#pageSize').onchange = () => { state.pageSize = parseInt($('#pageSize').value,10); localStorage.setItem('pageSize', state.pageSize); state.page=1; renderRows(); };
+$('#prevBtn').onclick = () => { state.page--; renderRows(); window.scrollTo({top:0,behavior:'smooth'}); };
+$('#nextBtn').onclick = () => { state.page++; renderRows(); window.scrollTo({top:0,behavior:'smooth'}); };
+$('#firstBtn').onclick = () => { state.page=1; renderRows(); };
+$('#lastBtn').onclick = () => { state.page = Math.max(1, Math.ceil(filtered().length/state.pageSize)); renderRows(); };
+$('#mFirstBtn').onclick = () => { state.page--; renderRows(); window.scrollTo({top:0,behavior:'smooth'}); };
+$('#mNextBtn').onclick = () => { state.page++; renderRows(); window.scrollTo({top:0,behavior:'smooth'}); };
 
-// Select all (visible page)
-$('#selectAll').addEventListener('change', (e) => {
+$('#selectAll').addEventListener('change', e => {
   const all = filtered();
-  const start = (state.page - 1) * state.pageSize;
-  const visible = all.slice(start, start + state.pageSize);
+  const start = (state.page-1)*state.pageSize;
+  const visible = all.slice(start, start+state.pageSize);
   if (e.target.checked) visible.forEach(w => state.selected.add(w.id));
   else visible.forEach(w => state.selected.delete(w.id));
   renderRows();
 });
 
-// Admin
+// Add/Edit
 $('#addBtn').onclick = () => openEdit();
-$('#bulkDeleteBtn').onclick = async () => {
-  if (!confirm(`Delete ${state.selected.size} websites?`)) return;
-  await api('/api/websites/bulk-delete', { method: 'POST', body: JSON.stringify({ ids: [...state.selected] }) });
-  state.selected.clear();
-  await loadWebsites();
-};
-
-$('#exportBtn').onclick = () => {
-  window.location.href = '/api/websites/export' + (state.token ? '?token=' + encodeURIComponent(state.token) : '');
-};
-
-$('#importBtn').onclick = () => {
-  $('#importMsg').textContent = '';
-  $('#csvText').value = '';
-  $('#csvFile').value = '';
-  $('#replaceMode').checked = false;
-  $('#importModal').classList.remove('hidden');
-};
-
-$('#downloadTemplate').onclick = (e) => {
-  e.preventDefault();
-  const csv = 'website,category,price,dr,da,traffic,notes,featured\nexample.com,Technology,100,50,51,10000,Sample notes,0\n';
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'websites-template.csv'; a.click();
-};
-
-$('#csvFile').addEventListener('change', async (e) => {
-  const file = e.target.files[0]; if (!file) return;
-  $('#csvText').value = await file.text();
-});
-
-$('#doImport').onclick = async () => {
-  const csv = $('#csvText').value.trim();
-  if (!csv) { $('#importMsg').textContent = 'Please choose a file or paste CSV.'; return; }
-  const replace = $('#replaceMode').checked ? '?replace=1' : '';
-  try {
-    $('#importMsg').textContent = 'Importing...';
-    const r = await api('/api/websites/import' + replace, { method: 'POST', body: JSON.stringify({ csv }) });
-    $('#importMsg').className = 'text-sm mt-3 text-green-700';
-    $('#importMsg').textContent = `Done. Added: ${r.added}, Updated: ${r.updated}, Total: ${r.total}`;
-    await loadWebsites();
-  } catch (err) {
-    $('#importMsg').className = 'text-sm mt-3 text-red-600';
-    $('#importMsg').textContent = err.message;
-  }
-};
-
-$('#usersBtn').onclick = async () => {
-  try {
-    const users = await api('/api/users');
-    $('#usersList').innerHTML = `
-      <table class="w-full text-sm">
-        <thead class="bg-slate-100"><tr><th class="text-left p-2">User</th><th class="text-left p-2">Role</th><th class="text-left p-2">Joined</th><th></th></tr></thead>
-        <tbody>${users.map(u => `<tr class="border-t">
-          <td class="p-2">${u.username}</td>
-          <td class="p-2"><span class="badge ${u.role==='admin'?'bg-amber-100 text-amber-700':'bg-slate-100'}">${u.role}</span></td>
-          <td class="p-2 text-slate-500 text-xs">${new Date(u.created_at).toLocaleString()}</td>
-          <td class="p-2 text-right">${u.role !== 'admin' ? `<button class="text-red-600 text-xs" onclick="delUser(${u.id})">Delete</button>` : ''}</td>
-        </tr>`).join('')}</tbody>
-      </table>`;
-    $('#usersModal').classList.remove('hidden');
-  } catch (e) { alert(e.message); }
-};
-window.delUser = async (id) => {
-  if (!confirm('Delete this user?')) return;
-  await api('/api/users/' + id, { method: 'DELETE' });
-  $('#usersBtn').click();
-};
-
-$('#inquiriesBtn').onclick = async () => {
-  try {
-    const list = await api('/api/inquiries');
-    $('#inquiriesList').innerHTML = list.length === 0
-      ? '<p class="text-sm text-slate-500 text-center py-8">No inquiries yet.</p>'
-      : list.map(i => `
-        <div class="border rounded-lg p-3">
-          <div class="flex justify-between text-sm mb-2">
-            <div><b>${i.username}</b> <span class="text-slate-500 text-xs">- ${new Date(i.created_at).toLocaleString()}</span></div>
-            <div class="font-semibold">${fmtMoney(i.total)}</div>
-          </div>
-          <ul class="text-sm text-slate-600 list-disc list-inside">
-            ${i.items.map(it => `<li>${it.website} - ${fmtMoney(it.price)}</li>`).join('')}
-          </ul>
-          <div class="text-right mt-2"><button class="text-red-600 text-xs" onclick="delInq(${i.id})">Delete</button></div>
-        </div>`).join('');
-    $('#inquiriesModal').classList.remove('hidden');
-  } catch (e) { alert(e.message); }
-};
-window.delInq = async (id) => {
-  await api('/api/inquiries/' + id, { method: 'DELETE' });
-  $('#inquiriesBtn').click();
-};
-
 function openEdit(w) {
-  $('#editTitle').textContent = w ? 'Edit Website' : 'Add Website';
-  $('#editId').value = w?.id || '';
-  $('#f_website').value = w?.website || '';
-  $('#f_category').value = w?.category || '';
-  $('#f_price').value = w?.price ?? '';
-  $('#f_dr').value = w?.dr ?? '';
-  $('#f_da').value = w?.da ?? '';
-  $('#f_traffic').value = w?.traffic ?? '';
-  $('#f_notes').value = w?.notes || '';
+  $('#editTitle').textContent = w?'Edit Website':'Add Website';
+  $('#editId').value = w?.id||'';
+  $('#f_website').value = w?.website||'';
+  $('#f_category').value = w?.category||'';
+  $('#f_price').value = w?.price??'';
+  $('#f_dr').value = w?.dr??'';
+  $('#f_da').value = w?.da??'';
+  $('#f_traffic').value = w?.traffic??'';
+  $('#f_notes').value = w?.notes||'';
   $('#f_featured').checked = !!w?.featured;
   $('#editModal').classList.remove('hidden');
 }
-window.editRow = (id) => openEdit(state.websites.find(w => w.id === id));
-window.deleteRow = async (id) => {
-  if (!confirm('Delete this website?')) return;
-  await api('/api/websites/' + id, { method: 'DELETE' });
-  await loadWebsites();
-};
+window.editRow = (id) => openEdit(state.websites.find(w=>w.id===id));
+window.deleteRow = async (id) => { if (confirm('Move to trash?')) { await api('/api/websites/'+id, {method:'DELETE'}); loadWebsites(); } };
 
 $('#editForm').onsubmit = async (e) => {
   e.preventDefault();
   const payload = {
-    website: $('#f_website').value.trim(),
-    category: $('#f_category').value.trim(),
-    price: $('#f_price').value,
-    dr: $('#f_dr').value,
-    da: $('#f_da').value,
-    traffic: $('#f_traffic').value,
-    notes: $('#f_notes').value.trim(),
-    featured: $('#f_featured').checked,
+    website: $('#f_website').value.trim(), category: $('#f_category').value.trim(),
+    price: $('#f_price').value, dr: $('#f_dr').value, da: $('#f_da').value,
+    traffic: $('#f_traffic').value, notes: $('#f_notes').value.trim(),
+    featured: $('#f_featured').checked
   };
   const id = $('#editId').value;
   try {
-    if (id) await api('/api/websites/' + id, { method: 'PUT', body: JSON.stringify(payload) });
-    else await api('/api/websites', { method: 'POST', body: JSON.stringify(payload) });
-    $('#editModal').classList.add('hidden');
-    await loadWebsites();
-  } catch (err) { alert(err.message); }
+    if (id) await api('/api/websites/'+id, {method:'PUT', body:JSON.stringify(payload)});
+    else await api('/api/websites', {method:'POST', body:JSON.stringify(payload)});
+    $('#editModal').classList.add('hidden'); loadWebsites();
+    toast('Saved', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// Bulk delete
+$('#bulkDeleteBtn').onclick = async () => {
+  if (!confirm(`Delete ${state.selected.size} websites?`)) return;
+  await api('/api/websites/bulk-delete', { method:'POST', body: JSON.stringify({ ids:[...state.selected] }) });
+  state.selected.clear(); loadWebsites();
+  toast('Moved to trash', 'success');
+};
+
+// Bulk edit
+$('#bulkEditBtn').onclick = () => {
+  $('#bulkEditCount').textContent = `(${state.selected.size} selected)`;
+  $('#bulkEditForm').reset();
+  $('#bulkEditModal').classList.remove('hidden');
+};
+$('#bulkEditForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const updates = {};
+  if ($('#be_category').value.trim()) updates.category = $('#be_category').value.trim();
+  if ($('#be_notes').value.trim()) updates.notes = $('#be_notes').value.trim();
+  if ($('#be_featured').value !== '') updates.featured = $('#be_featured').value === '1';
+  const priceAdjust = {};
+  if ($('#be_price_type').value) {
+    priceAdjust.type = $('#be_price_type').value;
+    priceAdjust.value = parseFloat($('#be_price_value').value)||0;
+  }
+  try {
+    const r = await api('/api/websites/bulk-edit', { method:'POST', body: JSON.stringify({ ids:[...state.selected], updates, priceAdjust }) });
+    $('#bulkEditModal').classList.add('hidden');
+    state.selected.clear(); loadWebsites();
+    toast(`Updated ${r.updated} websites`, 'success');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// Export/Import
+$('#exportBtn').onclick = () => { window.location.href = '/api/websites/export' + (state.token ? '?token='+encodeURIComponent(state.token) : ''); };
+$('#importBtn').onclick = () => { $('#importMsg').textContent=''; $('#csvText').value=''; $('#csvFile').value=''; $('#replaceMode').checked=false; $('#importModal').classList.remove('hidden'); };
+$('#downloadTemplate').onclick = (e) => { e.preventDefault();
+  const csv = 'website,category,price,dr,da,traffic,notes,featured\nexample.com,Technology,100,50,51,10000,Sample notes,0\n';
+  const blob = new Blob([csv], {type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='websites-template.csv'; a.click();
+};
+$('#csvFile').addEventListener('change', async (e) => { const f=e.target.files[0]; if(f) $('#csvText').value = await f.text(); });
+$('#doImport').onclick = async () => {
+  const csv = $('#csvText').value.trim();
+  if (!csv) { $('#importMsg').textContent = 'Choose file or paste CSV.'; return; }
+  const replace = $('#replaceMode').checked ? '?replace=1' : '';
+  try {
+    $('#importMsg').textContent = 'Importing...';
+    const r = await api('/api/websites/import'+replace, { method:'POST', body: JSON.stringify({ csv }) });
+    $('#importMsg').className = 'text-sm mt-3 text-green-700';
+    $('#importMsg').textContent = `Done. Added: ${r.added}, Updated: ${r.updated}, Total: ${r.total}`;
+    loadWebsites();
+  } catch(err) { $('#importMsg').className='text-sm mt-3 text-red-600'; $('#importMsg').textContent = err.message; }
 };
 
 // Init
 async function init() {
-  try {
-    const cfg = await fetch('/api/config').then(r => r.json());
-    state.whatsapp = cfg.whatsapp;
-  } catch {}
+  try { const cfg = await fetch('/api/config').then(r=>r.json()); state.whatsapp = cfg.whatsapp; } catch{}
+  await loadRates();
   saveCart();
   renderUserArea();
   await loadWebsites();
