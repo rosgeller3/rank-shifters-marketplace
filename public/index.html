@@ -9,6 +9,9 @@
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
   .star { color: #f59e0b; }
+  .btn-primary { background-color:#16a34a; color:#fff; }
+  .btn-primary:hover { background-color:#15803d; }
+  .text-primary { color:#16a34a; }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -17,12 +20,12 @@
 <header class="bg-white border-b sticky top-0 z-30">
   <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <div class="w-8 h-8 rounded bg-indigo-600 text-white grid place-items-center font-bold">R</div>
+      <div class="w-8 h-8 rounded text-white grid place-items-center font-bold" style="background-color:#16a34a;">R</div>
       <h1 class="text-lg font-semibold">Rank Shifters</h1>
     </div>
     <div class="flex items-center gap-3">
       <button id="cartBtn" class="relative px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-slate-50">
-        Cart <span id="cartCount" class="ml-1 inline-block min-w-[20px] text-center text-xs bg-indigo-600 text-white rounded-full px-1.5">0</span>
+        Cart <span id="cartCount" class="ml-1 inline-block min-w-[20px] text-center text-xs text-white rounded-full px-1.5" style="background-color:#16a34a;">0</span>
       </button>
       <div id="userArea"></div>
     </div>
@@ -31,8 +34,8 @@
 
 <main class="max-w-7xl mx-auto p-4">
 
-  <!-- Stats -->
-  <div id="statsBar" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+  <!-- Stats (admin only) -->
+  <div id="statsBar" class="hidden grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
     <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Total Sites</div><div id="sTotal" class="text-2xl font-semibold mt-1">-</div></div>
     <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Avg Price</div><div id="sAvg" class="text-2xl font-semibold mt-1">-</div></div>
     <div class="bg-white border rounded-xl p-3"><div class="text-xs text-slate-500">Price Range</div><div id="sRange" class="text-2xl font-semibold mt-1">-</div></div>
@@ -59,7 +62,7 @@
 
   <!-- Admin actions -->
   <div id="adminBar" class="hidden mb-4 flex flex-wrap gap-2">
-    <button id="addBtn" class="px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">+ Add Website</button>
+    <button id="addBtn" class="px-3 py-2 text-sm btn-primary rounded-lg">+ Add Website</button>
     <button id="importBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Import CSV</button>
     <button id="exportBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Export CSV</button>
     <button id="bulkDeleteBtn" class="hidden px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Selected (<span id="selCount">0</span>)</button>
@@ -90,9 +93,31 @@
       </table>
     </div>
     <div id="empty" class="hidden p-8 text-center text-slate-500">No results.</div>
-    <div class="p-3 text-xs text-slate-500 border-t flex justify-between">
-      <span id="resultCount">0 results</span>
-      <span id="resultTotal"></span>
+    <!-- Pagination -->
+    <div class="p-3 border-t flex flex-col md:flex-row gap-3 items-center justify-between text-sm">
+      <div class="flex items-center gap-2">
+        <span id="resultCount" class="text-slate-500">0 results</span>
+        <span class="text-slate-300">·</span>
+        <label class="text-slate-500">Per page:
+          <select id="pageSize" class="border rounded px-2 py-1 ml-1 text-slate-700">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+          </select>
+        </label>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="firstPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">«</button>
+        <button id="prevPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">‹ Prev</button>
+        <span id="pageInfo" class="px-2 text-slate-600">Page 1 of 1</span>
+        <button id="nextPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">Next ›</button>
+        <button id="lastPage" class="px-2 py-1 border rounded hover:bg-slate-50 disabled:opacity-40">»</button>
+        <span class="text-slate-400">·</span>
+        <span class="text-slate-500">Go to:</span>
+        <input id="gotoPage" type="number" min="1" class="border rounded px-2 py-1 w-16" />
+      </div>
     </div>
   </div>
 </main>
@@ -122,14 +147,14 @@
   <div class="absolute inset-0 bg-black/50" data-close></div>
   <div class="relative bg-white rounded-xl w-full max-w-sm p-5 shadow-xl">
     <div class="flex gap-2 mb-4">
-      <button class="authTab flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-sm" data-tab="login">Login</button>
+      <button class="authTab flex-1 py-1.5 rounded-lg btn-primary text-sm" data-tab="login">Login</button>
       <button class="authTab flex-1 py-1.5 rounded-lg bg-slate-100 text-sm" data-tab="register">Register</button>
     </div>
     <form id="authForm" class="space-y-3">
       <input id="authUser" placeholder="Username" class="w-full border rounded-lg px-3 py-2" required autocomplete="username" />
       <input id="authPass" type="password" placeholder="Password" class="w-full border rounded-lg px-3 py-2" required autocomplete="current-password" />
       <div id="authErr" class="text-sm text-red-600 hidden"></div>
-      <button class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" type="submit">
+      <button class="w-full py-2 rounded-lg btn-primary" type="submit">
         <span id="authSubmitText">Login</span>
       </button>
     </form>
@@ -156,7 +181,7 @@
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="f_featured" /> Featured (pin to top)</label>
       <div class="flex gap-2 justify-end">
         <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
-        <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" type="submit">Save</button>
+        <button class="px-4 py-2 rounded-lg btn-primary" type="submit">Save</button>
       </div>
     </form>
   </div>
@@ -172,10 +197,10 @@
     <textarea id="csvText" placeholder="...or paste CSV here" class="w-full border rounded-lg p-2 text-sm h-32 font-mono"></textarea>
     <label class="flex items-center gap-2 text-sm mt-3"><input type="checkbox" id="replaceMode" /> Replace all existing websites</label>
     <div class="flex justify-between items-center mt-4">
-      <a href="#" id="downloadTemplate" class="text-sm text-indigo-600 hover:underline">Download template</a>
+      <a href="#" id="downloadTemplate" class="text-sm text-primary hover:underline">Download template</a>
       <div class="flex gap-2">
         <button data-close class="px-3 py-2 rounded-lg border">Cancel</button>
-        <button id="doImport" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">Import</button>
+        <button id="doImport" class="px-4 py-2 rounded-lg btn-primary">Import</button>
       </div>
     </div>
     <div id="importMsg" class="text-sm mt-3"></div>
@@ -210,6 +235,8 @@ const state = {
   selected: new Set(),
   whatsapp: '',
   authTab: 'login',
+  page: 1,
+  pageSize: parseInt(localStorage.getItem('pageSize') || '50', 10),
 };
 
 const $ = (s) => document.querySelector(s);
@@ -244,18 +271,21 @@ function renderUserArea() {
       state.selected.clear();
       renderUserArea(); renderRows();
       $('#adminBar').classList.add('hidden');
+      $('#statsBar').classList.add('hidden');
       $('#selectAllTh').classList.add('hidden');
     };
   } else {
-    el.innerHTML = `<button id="loginBtn" class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Login / Register</button>`;
+    el.innerHTML = `<button id="loginBtn" class="px-3 py-1.5 text-sm rounded-lg btn-primary">Login / Register</button>`;
     $('#loginBtn').onclick = () => openAuth();
   }
   const isAdmin = state.user && state.user.role === 'admin';
   $('#adminBar').classList.toggle('hidden', !isAdmin);
+  $('#statsBar').classList.toggle('hidden', !isAdmin);
   $('#selectAllTh').classList.toggle('hidden', !isAdmin);
 }
 
 async function loadStats() {
+  if (!state.user || state.user.role !== 'admin') return;
   try {
     const s = await api('/api/stats');
     $('#sTotal').textContent = s.total;
@@ -274,6 +304,7 @@ async function loadWebsites() {
   sel.innerHTML = '<option value="">All categories</option>' +
     [...state.categories].sort().map(c => `<option value="${c}">${c}</option>`).join('');
   sel.value = cur;
+  state.page = 1;
   renderRows();
   loadStats();
 }
@@ -310,12 +341,29 @@ function whatsappLinkSingle(w) {
 }
 
 function renderRows() {
-  const rows = filtered();
+  const all = filtered();
   const isAdmin = state.user && state.user.role === 'admin';
-  $('#empty').classList.toggle('hidden', rows.length > 0);
-  $('#resultCount').textContent = `${rows.length} of ${state.websites.length} websites`;
-  const sumP = rows.reduce((s,w) => s + (w.price||0), 0);
-  $('#resultTotal').textContent = `Total value: ${fmtMoney(sumP)}`;
+  const totalPages = Math.max(1, Math.ceil(all.length / state.pageSize));
+  if (state.page > totalPages) state.page = totalPages;
+  if (state.page < 1) state.page = 1;
+  const start = (state.page - 1) * state.pageSize;
+  const rows = all.slice(start, start + state.pageSize);
+
+  $('#empty').classList.toggle('hidden', all.length > 0);
+  const totalShown = all.length;
+  const fromIdx = totalShown ? start + 1 : 0;
+  const toIdx = Math.min(start + state.pageSize, totalShown);
+  $('#resultCount').textContent = totalShown
+    ? `Showing ${fromIdx}-${toIdx} of ${fmtNum(totalShown)} (total ${fmtNum(state.websites.length)})`
+    : '0 results';
+  $('#pageInfo').textContent = `Page ${state.page} of ${totalPages}`;
+  $('#prevPage').disabled = state.page <= 1;
+  $('#firstPage').disabled = state.page <= 1;
+  $('#nextPage').disabled = state.page >= totalPages;
+  $('#lastPage').disabled = state.page >= totalPages;
+  $('#gotoPage').max = totalPages;
+  $('#gotoPage').placeholder = String(state.page);
+
   $('#rows').innerHTML = rows.map(w => {
     const inCart = state.cart.some(c => c.id === w.id);
     const sel = state.selected.has(w.id) ? 'checked' : '';
@@ -324,7 +372,7 @@ function renderRows() {
         ${isAdmin ? `<td class="text-center px-3 py-3"><input type="checkbox" class="rowSel" data-id="${w.id}" ${sel}/></td>` : ''}
         <td class="px-4 py-3 font-medium">
           ${w.featured ? '<span class="star mr-1" title="Featured">★</span>' : ''}
-          <a href="https://${w.website.replace(/^https?:\/\//,'')}" target="_blank" class="text-indigo-600 hover:underline">${w.website}</a>
+          <a href="https://${w.website.replace(/^https?:\/\//,'')}" target="_blank" class="text-primary hover:underline">${w.website}</a>
         </td>
         <td class="px-4 py-3"><span class="badge bg-slate-100 text-slate-700">${w.category || '-'}</span></td>
         <td class="px-4 py-3 text-right font-semibold">${fmtMoney(w.price)}</td>
@@ -334,10 +382,10 @@ function renderRows() {
         <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${(w.notes||'').replace(/"/g,'&quot;')}">${w.notes || ''}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
           ${isAdmin
-            ? `<button class="text-indigo-600 hover:underline text-xs mr-2" onclick="editRow(${w.id})">Edit</button>
+            ? `<button class="text-primary hover:underline text-xs mr-2" onclick="editRow(${w.id})">Edit</button>
                <button class="text-red-600 hover:underline text-xs" onclick="deleteRow(${w.id})">Delete</button>`
             : `<a href="${whatsappLinkSingle(w)}" target="_blank" class="inline-block px-2 py-1 text-xs rounded-lg border border-green-600 text-green-700 hover:bg-green-50 mr-1">WhatsApp</a>
-               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}" onclick="toggleCart(${w.id})">${inCart ? 'In cart' : '+ Add'}</button>`
+               <button class="px-2.5 py-1 text-xs rounded-lg ${inCart ? 'bg-slate-200 text-slate-600' : 'btn-primary'}" onclick="toggleCart(${w.id})">${inCart ? 'In cart' : '+ Add'}</button>`
           }
         </td>
       </tr>`;
@@ -397,7 +445,7 @@ function setAuthTab(tab) {
   state.authTab = tab;
   $$('.authTab').forEach(b => {
     const active = b.dataset.tab === tab;
-    b.className = `authTab flex-1 py-1.5 rounded-lg ${active ? 'bg-indigo-600 text-white' : 'bg-slate-100'} text-sm`;
+    b.className = `authTab flex-1 py-1.5 rounded-lg ${active ? 'btn-primary' : 'bg-slate-100'} text-sm`;
   });
   $('#authSubmitText').textContent = tab === 'login' ? 'Login' : 'Create account';
 }
@@ -423,7 +471,7 @@ $('#authForm').onsubmit = async (e) => {
     localStorage.setItem('user', JSON.stringify(data.user));
     $('#authModal').classList.add('hidden');
     $('#authForm').reset();
-    renderUserArea(); renderRows();
+    renderUserArea(); renderRows(); loadStats();
   } catch (err) {
     $('#authErr').textContent = err.message;
     $('#authErr').classList.remove('hidden');
@@ -436,7 +484,6 @@ $('#clearCart').onclick = () => { state.cart = []; saveCart(); renderCart(); ren
 $('#whatsappBtn').onclick = async () => {
   if (state.cart.length === 0) { alert('Your cart is empty.'); return; }
   const total = state.cart.reduce((s, c) => s + Number(c.price || 0), 0);
-  // Log inquiry (best effort)
   try {
     await api('/api/inquiries', { method: 'POST', body: JSON.stringify({ items: state.cart, total }) });
   } catch {}
@@ -446,14 +493,33 @@ $('#whatsappBtn').onclick = async () => {
   window.open(url, '_blank');
 };
 
-// Filters
+// Filters - reset to page 1 on filter change
 ['search','categoryFilter','sortBy','minPrice','maxPrice'].forEach(id => {
-  $('#' + id).addEventListener('input', renderRows);
+  $('#' + id).addEventListener('input', () => { state.page = 1; renderRows(); });
 });
 
-// Select all
+// Pagination controls
+$('#firstPage').onclick = () => { state.page = 1; renderRows(); };
+$('#prevPage').onclick = () => { state.page--; renderRows(); };
+$('#nextPage').onclick = () => { state.page++; renderRows(); };
+$('#lastPage').onclick = () => { state.page = Math.ceil(filtered().length / state.pageSize); renderRows(); };
+$('#pageSize').value = state.pageSize;
+$('#pageSize').onchange = (e) => {
+  state.pageSize = parseInt(e.target.value, 10);
+  localStorage.setItem('pageSize', String(state.pageSize));
+  state.page = 1;
+  renderRows();
+};
+$('#gotoPage').addEventListener('change', (e) => {
+  const p = parseInt(e.target.value, 10);
+  if (p >= 1) { state.page = p; renderRows(); e.target.value = ''; }
+});
+
+// Select all (current page only)
 $('#selectAll').addEventListener('change', (e) => {
-  const visible = filtered();
+  const all = filtered();
+  const start = (state.page - 1) * state.pageSize;
+  const visible = all.slice(start, start + state.pageSize);
   if (e.target.checked) visible.forEach(w => state.selected.add(w.id));
   else visible.forEach(w => state.selected.delete(w.id));
   renderRows();
