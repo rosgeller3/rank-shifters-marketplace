@@ -1,10 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,171 +13,59 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER || '919712565375';
-const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
+const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ----- Store -----
-let store = {
-  users: [], websites: [], inquiries: [], orders: [], wishlists: [], views: {}, daily_stats: {},
-  _ids: { user: 0, website: 0, inquiry: 0, order: 0 }
-};
-function loadStore() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const loaded = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      store = { users:[], websites:[], inquiries:[], orders:[], wishlists:[], views:{}, daily_stats:{}, _ids:{user:0,website:0,inquiry:0,order:0}, ...loaded };
-      ['orders','wishlists'].forEach(k => { if (!store[k]) store[k] = []; });
-      ['views','daily_stats'].forEach(k => { if (!store[k]) store[k] = {}; });
-      ['order'].forEach(k => { if (!store._ids[k]) store._ids[k] = 0; });
-    }
-  } catch(e) { console.error('load:', e); }
+let db;
+let client;
+
+async function nextId(k) {
+  const result = await db.collection('counters').findOneAndUpdate(
+    { _id: k },
+    { $inc: { seq: 1 } },
+    { returnDocument: 'after', upsert: true }
+  );
+  return result.seq;
 }
-let saveTimer = null;
-function saveStore() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2)), 50);
-}
-function nextId(k) { store._ids[k] = (store._ids[k]||0) + 1; return store._ids[k]; }
+
 function todayStr() { return new Date().toISOString().slice(0,10); }
-function bumpDaily(metric, n=1) {
+
+async function bumpDaily(metric, n=1) {
   const d = todayStr();
-  if (!store.daily_stats[d]) store.daily_stats[d] = {};
-  store.daily_stats[d][metric] = (store.daily_stats[d][metric]||0) + n;
-  saveStore();
+  const update = {};
+  update[metric] = n;
+  await db.collection('daily_stats').updateOne(
+    { date: d },
+    { $inc: update },
+    { upsert: true }
+  );
 }
 
-function logEvent(type, data = {}) {
-  const event = { id: nextId('event'), type, at: new Date().toISOString(), ...data };
-  store.events = store.events || [];
-  store.events.push(event);
-  // Keep last 50k events to prevent unbounded growth
-  if (store.events.length > 50000) {
-    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-    store.events = store.events.filter(e => new Date(e.at).getTime() >= cutoff);
-  }
-  saveStore();
-}
-
-
-loadStore();
-
-// Sync admin from env every start
-const adminIdx = store.users.findIndex(u => u.username === ADMIN_USERNAME);
-if (adminIdx < 0) {
-  store.users.push({ id: nextId('user'), username: ADMIN_USERNAME, password: bcrypt.hashSync(ADMIN_PASSWORD,10), role: 'admin', email_verified: true, created_at: new Date().toISOString() });
-  saveStore(); console.log('Admin created');
-} else {
-  if (!bcrypt.compareSync(ADMIN_PASSWORD, store.users[adminIdx].password) || store.users[adminIdx].role !== 'admin') {
-    store.users[adminIdx].password = bcrypt.hashSync(ADMIN_PASSWORD,10);
-    store.users[adminIdx].role = 'admin';
-    store.users[adminIdx].email_verified = true;
-    saveStore(); console.log('Admin synced');
+async function logEvent(type, data = {}) {
+  const event = { id: await nextId('event'), type, at: new Date().toISOString(), ...data };
+  await db.collection('events').insertOne(event);
+  
+  // Cleanup old events (approximate, running occasionally)
+  if (Math.random() < 0.05) {
+    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    await db.collection('events').deleteMany({ at: { $lt: cutoff } });
   }
 }
 
-// Seed demo
-if (store.websites.length === 0) {
-  const seed = [
-    ['techbullion.com','Business',25,81,80,71000,'Premium tech publication, Dofollow Backlink'],
-    ['trustpost.org','General',10,25,25,80000000,'Dofollow Backlink'],
-    ['grammarvibe.org','General',20,9,9,1,'Dofollow Backlink'],
-['loveequotes.com','General',20,31,31,1,'Dofollow Backlink'],
-['grammeroverview.com','General',20,41,41,1,'Dofollow Backlink'],
-['spiritualmeaningacademy.com','General',20,30,30,1,'Dofollow Backlink'],
-['namegeneratorz.com','General',20,44,44,1,'Dofollow Backlink'],
-['omnisizes.com','General',20,44,44,1,'Dofollow Backlink'],
-['luminousquotes.com','General',20,44,44,1,'Dofollow Backlink'],
-['punsuniverse.com','General',20,47,47,1,'Dofollow Backlink'],
-['coolthoughts.in','General',20,52,52,1,'Dofollow Backlink'],
-['nameradiant.com','General',20,50,50,1,'Dofollow Backlink'],
-['linepoetry.com','General',20,55,55,1,'Dofollow Backlink'],
-['scriptlike.com','General',10,0,0,1,'Dofollow Backlink'],
-['toucpaydirect.com','General',10,0,0,0,'Dofollow Backlink'],
-['coative.com','General',10,13,13,0,'Dofollow Backlink'],
-['cellury.com','General',10,13,13,0,'Dofollow Backlink'],
-['digitalworkskills.com','General',10,13,13,0,'Dofollow Backlink'],
-['sitecmedia.com','General',10,13,13,0,'Dofollow Backlink'],
-['clasessmax.com','General',10,13,13,0,'Dofollow Backlink'],
-['lovejinxx.com','General',10,20,20,0,'Dofollow Backlink'],
-['jerkmatey.com','General',10,20,20,0,'Dofollow Backlink'],
-['niteflirty.com','General',10,20,20,0,'Dofollow Backlink'],
-['chatziey.com','General',10,20,20,0,'Dofollow Backlink'],
-['gaseslighting.com','General',10,25,25,0,'Dofollow Backlink'],
-['traductorr.net','General',10,25,25,0,'Dofollow Backlink'],
-['fastpeoplesearchs.net','General',10,25,25,0,'Dofollow Backlink'],
-['sportsurgers.net','General',10,25,25,0,'Dofollow Backlink'],
-['duolingos.net','General',10,25,25,0,'Dofollow Backlink'],
-['funwithfeetr.net','General',10,25,25,0,'Dofollow Backlink'],
-['hurawatcher.net','General',10,25,25,0,'Dofollow Backlink'],
-['ticketmasterr.net','General',10,25,25,0,'Dofollow Backlink'],
-['unityfied.com','General',10,25,25,0,'Dofollow Backlink'],
-['indexedollar.net','General',10,25,25,0,'Dofollow Backlink'],
-['allgofundme.com','General',10,25,25,0,'Dofollow Backlink'],
-['hnadown.com','General',10,25,25,0,'Dofollow Backlink'],
-['groupofseo.com','General',10,25,25,0,'Dofollow Backlink'],
-['digitalguidz.com','General',10,25,25,0,'Dofollow Backlink'],
-['overtonmagazin.de','General',10,25,25,0,'Dofollow Backlink'],
-['socialnetworkk.de','General',10,25,25,0,'Dofollow Backlink'],
-['wheonx.de','General',10,25,25,0,'Dofollow Backlink'],
-['climarz.com','General',10,25,25,0,'Dofollow Backlink'],
-['godgiftes.com','General',10,25,25,0,'Dofollow Backlink'],
-['toonstreams.net','General',10,25,25,0,'Dofollow Backlink'],
-['grownewsplan.com','General',10,25,25,0,'Dofollow Backlink'],
-['fenidrinks.com','General',10,27,27,0,'Dofollow Backlink'],
-['newsacid.com','General',10,27,27,0,'Dofollow Backlink'],
-['newsicz.com','General',10,27,27,0,'Dofollow Backlink'],
-['gotlatent.com','General',10,27,27,0,'Dofollow Backlink'],
-['lookfantastic.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['timebucks.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['starwars.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['serpzilla.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['article.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['writeforus.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['aavots.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['anywherestory.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['wheretowatchh.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['fashionisk.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['usaenlinea.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['jiloviral.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['cryptomarket.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['takipci.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['usps.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['urbandictionary.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['gimkit.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['piercing.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['goodreads.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['jobstreet.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['southwest.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['mhdtvworld.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['fastfollow.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['hdhubforu.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['easytonet.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['metapress.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['hint.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['homeblog.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['planetfitness.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['blogsternation.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['jerseyexpress.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['kingdom.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['newcastle.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['globoz.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['available.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['gross.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['bloger.com.in','General',10,82,82,0,'Dofollow Backlink'],
-['housebeautiful.com.in','General',10,82,82,0,'Dofollow Backlink'],
-  ];
-  for (const [website,category,price,dr,da,traffic,notes] of seed) {
-    store.websites.push({ id: nextId('website'), website, category, price, dr, da, traffic, notes, featured:0, views:0, deleted_at: null, created_at: new Date().toISOString() });
-  }
-  saveStore(); console.log('Seeded');
+// Ensure clean objects without MongoDB _id
+function cleanOutput(obj) {
+  if (!obj) return null;
+  const { _id, ...rest } = obj;
+  return rest;
 }
+function cleanArray(arr) { return arr.map(cleanOutput); }
 
 // Auth middleware
 function auth(required=true) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const h = req.headers.authorization || '';
     const tok = h.startsWith('Bearer ') ? h.slice(7) : (req.query.token || null);
     if (!tok) { if (required) return res.status(401).json({error:'Unauthorized'}); return next(); }
@@ -215,163 +104,163 @@ function parseCSV(t) {
 function csvEscape(v){const s=v==null?'':String(v);return /[",\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
 function toCSV(rows,headers){return [headers.join(','), ...rows.map(r=>headers.map(h=>csvEscape(r[h])).join(','))].join('\n');}
 
+
 // ============== ROUTES ==============
 app.get('/api/config', (req,res) => res.json({ whatsapp: WHATSAPP_NUMBER }));
 
 // ----- Auth -----
-app.post('/api/register', (req,res) => {
+app.post('/api/register', async (req,res) => {
   const { username, password, email } = req.body || {};
   if (!username || !password) return res.status(400).json({error:'username and password required'});
   if (password.length < 4) return res.status(400).json({error:'password too short'});
-  if (store.users.find(u => u.username === username)) return res.status(409).json({error:'Username taken'});
+  const existing = await db.collection('users').findOne({ username });
+  if (existing) return res.status(409).json({error:'Username taken'});
+  
   const user = {
-    id: nextId('user'), username, password: bcrypt.hashSync(password,10), role:'user',
+    id: await nextId('user'), username, password: bcrypt.hashSync(password,10), role:'user',
     email: (email||'').trim() || null,
     email_verified: false,
     verification_token: crypto.randomBytes(16).toString('hex'),
     created_at: new Date().toISOString()
   };
-  store.users.push(user); saveStore();
-  bumpDaily('signups');
+  await db.collection('users').insertOne(user);
+  await bumpDaily('signups');
   const token = jwt.sign({id:user.id,username,role:'user'}, JWT_SECRET, {expiresIn:'30d'});
   res.json({ token, user: {id:user.id, username, role:'user'} });
 });
 
-app.post('/api/login', (req,res) => {
+app.post('/api/login', async (req,res) => {
   const { username, password } = req.body || {};
-  const user = store.users.find(u => u.username === username);
+  const user = await db.collection('users').findOne({ username });
   if (!user || !bcrypt.compareSync(password||'', user.password)) return res.status(401).json({error:'Invalid credentials'});
-  user.last_login = new Date().toISOString();
-  saveStore();
+  
+  await db.collection('users').updateOne({ id: user.id }, { $set: { last_login: new Date().toISOString() } });
+  
   const token = jwt.sign({id:user.id,username:user.username,role:user.role}, JWT_SECRET, {expiresIn:'30d'});
   res.json({ token, user: {id:user.id, username:user.username, role:user.role} });
 });
 
 app.get('/api/me', auth(true), (req,res) => res.json({ user: req.user }));
 
-// ----- Websites (with soft delete + view tracking) -----
-app.get('/api/websites', (req,res) => {
+// ----- Websites -----
+app.get('/api/websites', async (req,res) => {
   const includeDeleted = String(req.query.deleted||'') === '1';
-  const rows = store.websites.filter(w => includeDeleted ? w.deleted_at : !w.deleted_at);
-  res.json([...rows].sort((a,b) => (b.featured||0)-(a.featured||0) || b.id - a.id));
+  const query = includeDeleted ? { deleted_at: { $ne: null } } : { deleted_at: null };
+  const rows = await db.collection('websites').find(query).toArray();
+  res.json(cleanArray(rows.sort((a,b) => (b.featured||0)-(a.featured||0) || b.id - a.id)));
 });
 
-app.post('/api/websites', auth(true), adminOnly, (req,res) => {
+app.post('/api/websites', auth(true), adminOnly, async (req,res) => {
   const data = normalizeWebsite(req.body);
   if (!data.website) return res.status(400).json({error:'website required'});
-  const w = { id: nextId('website'), ...data, views:0, deleted_at:null, created_at: new Date().toISOString() };
-  store.websites.push(w); saveStore();
-  res.json(w);
+  const w = { id: await nextId('website'), ...data, views:0, deleted_at:null, created_at: new Date().toISOString() };
+  await db.collection('websites').insertOne(w);
+  res.json(cleanOutput(w));
 });
 
-app.put('/api/websites/:id', auth(true), adminOnly, (req,res) => {
+app.put('/api/websites/:id', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
-  const idx = store.websites.findIndex(w => w.id === id);
-  if (idx < 0) return res.status(404).json({error:'Not found'});
-  store.websites[idx] = { ...store.websites[idx], ...normalizeWebsite(req.body) };
-  saveStore();
-  res.json(store.websites[idx]);
+  const data = normalizeWebsite(req.body);
+  const result = await db.collection('websites').findOneAndUpdate(
+    { id },
+    { $set: data },
+    { returnDocument: 'after' }
+  );
+  if (!result) return res.status(404).json({error:'Not found'});
+  res.json(cleanOutput(result));
 });
 
-// Soft delete
-app.delete('/api/websites/:id', auth(true), adminOnly, (req,res) => {
+app.delete('/api/websites/:id', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
-  const w = store.websites.find(w => w.id === id);
-  if (!w) return res.status(404).json({error:'Not found'});
-  w.deleted_at = new Date().toISOString();
-  saveStore();
+  const result = await db.collection('websites').updateOne({ id }, { $set: { deleted_at: new Date().toISOString() } });
+  if (result.matchedCount === 0) return res.status(404).json({error:'Not found'});
   res.json({ ok:true });
 });
 
-// Restore
-app.post('/api/websites/:id/restore', auth(true), adminOnly, (req,res) => {
+app.post('/api/websites/:id/restore', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
-  const w = store.websites.find(w => w.id === id);
-  if (!w) return res.status(404).json({error:'Not found'});
-  w.deleted_at = null;
-  saveStore();
-  res.json(w);
+  const result = await db.collection('websites').findOneAndUpdate({ id }, { $set: { deleted_at: null } }, { returnDocument: 'after' });
+  if (!result) return res.status(404).json({error:'Not found'});
+  res.json(cleanOutput(result));
 });
 
-// Permanent delete
-app.delete('/api/websites/:id/permanent', auth(true), adminOnly, (req,res) => {
+app.delete('/api/websites/:id/permanent', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
-  store.websites = store.websites.filter(w => w.id !== id);
-  saveStore();
+  await db.collection('websites').deleteOne({ id });
   res.json({ ok:true });
 });
 
-// Bulk delete (soft)
-app.post('/api/websites/bulk-delete', auth(true), adminOnly, (req,res) => {
+app.post('/api/websites/bulk-delete', auth(true), adminOnly, async (req,res) => {
   const ids = (req.body?.ids||[]).map(Number);
-  let n = 0;
-  for (const w of store.websites) {
-    if (ids.includes(w.id) && !w.deleted_at) { w.deleted_at = new Date().toISOString(); n++; }
-  }
-  saveStore();
-  res.json({ deleted:n });
+  const result = await db.collection('websites').updateMany(
+    { id: { $in: ids }, deleted_at: null },
+    { $set: { deleted_at: new Date().toISOString() } }
+  );
+  res.json({ deleted: result.modifiedCount });
 });
 
-// Bulk edit
-app.post('/api/websites/bulk-edit', auth(true), adminOnly, (req,res) => {
+app.post('/api/websites/bulk-edit', auth(true), adminOnly, async (req,res) => {
   const { ids = [], updates = {}, priceAdjust } = req.body || {};
-  const idSet = new Set(ids.map(Number));
+  const idSet = ids.map(Number);
+  
+  const sites = await db.collection('websites').find({ id: { $in: idSet }, deleted_at: null }).toArray();
   let updated = 0;
-  for (const w of store.websites) {
-    if (!idSet.has(w.id) || w.deleted_at) continue;
-    if (updates.category !== undefined) w.category = String(updates.category).trim();
-    if (updates.notes !== undefined) w.notes = String(updates.notes).trim();
-    if (updates.featured !== undefined) w.featured = updates.featured ? 1 : 0;
+  
+  for (const w of sites) {
+    let changed = false;
+    if (updates.category !== undefined) { w.category = String(updates.category).trim(); changed = true; }
+    if (updates.notes !== undefined) { w.notes = String(updates.notes).trim(); changed = true; }
+    if (updates.featured !== undefined) { w.featured = updates.featured ? 1 : 0; changed = true; }
     if (priceAdjust && priceAdjust.type) {
       const base = Number(w.price)||0;
       if (priceAdjust.type === 'set') w.price = Number(priceAdjust.value)||0;
       else if (priceAdjust.type === 'percent') w.price = Math.round(base * (1 + Number(priceAdjust.value)/100));
       else if (priceAdjust.type === 'add') w.price = base + Number(priceAdjust.value)||0;
+      changed = true;
     }
-    updated++;
+    if (changed) {
+      await db.collection('websites').updateOne({ id: w.id }, { $set: w });
+      updated++;
+    }
   }
-  saveStore();
   res.json({ updated });
 });
 
-// View tracking (anyone)
-app.post('/api/websites/:id/view', (req,res) => {
+app.post('/api/websites/:id/view', async (req,res) => {
   const id = Number(req.params.id);
-  const w = store.websites.find(w => w.id === id);
-  if (!w) return res.status(404).json({error:'Not found'});
-  w.views = (w.views||0) + 1;
-  bumpDaily('views');
-  saveStore();
-  res.json({ views: w.views });
+  const result = await db.collection('websites').findOneAndUpdate(
+    { id },
+    { $inc: { views: 1 } },
+    { returnDocument: 'after' }
+  );
+  if (!result) return res.status(404).json({error:'Not found'});
+  await bumpDaily('views');
+  res.json({ views: result.views });
 });
 
-// ---------- Generic event tracking (clicks, etc) ----------
-app.post('/api/track', auth(false), (req, res) => {
+app.post('/api/track', auth(false), async (req, res) => {
   const { kind, website_id, meta } = req.body || {};
   if (!['view','click','search','add_to_cart','add_to_wishlist'].includes(kind)) {
     return res.status(400).json({ error: 'invalid kind' });
   }
-  logEvent(kind, { website_id: website_id ? Number(website_id) : null, meta, username: req.user?.username || 'guest' });
+  await logEvent(kind, { website_id: website_id ? Number(website_id) : null, meta, username: req.user?.username || 'guest' });
   if (kind === 'click' && website_id) {
-    const w = store.websites.find(x => x.id === Number(website_id));
-    if (w) { w.clicks = (w.clicks || 0) + 1; saveStore(); }
+    await db.collection('websites').updateOne({ id: Number(website_id) }, { $inc: { clicks: 1 } });
   }
   res.json({ ok: true });
 });
 
-// Trending (top by views in last 7 days - approximated by total views for now)
-app.get('/api/websites/trending', (req,res) => {
+app.get('/api/websites/trending', async (req,res) => {
   const limit = Number(req.query.limit) || 5;
-  const trending = store.websites
-    .filter(w => !w.deleted_at && (w.views||0) > 0)
-    .sort((a,b) => (b.views||0) - (a.views||0))
-    .slice(0, limit)
-    .map(w => ({ id: w.id, website: w.website, views: w.views }));
-  res.json(trending);
+  const trending = await db.collection('websites')
+    .find({ deleted_at: null, views: { $gt: 0 } })
+    .sort({ views: -1 })
+    .limit(limit)
+    .toArray();
+  res.json(trending.map(w => ({ id: w.id, website: w.website, views: w.views })));
 });
 
-// CSV import
-app.post('/api/websites/import', auth(true), adminOnly, (req,res) => {
+app.post('/api/websites/import', auth(true), adminOnly, async (req,res) => {
   let csv = (req.body && req.body.csv) || '';
   if (!csv) return res.status(400).json({error:'No CSV'});
   const rows = parseCSV(csv.trim());
@@ -380,8 +269,12 @@ app.post('/api/websites/import', auth(true), adminOnly, (req,res) => {
   const idx = name => headers.indexOf(name);
   const wIdx = idx('website');
   if (wIdx < 0) return res.status(400).json({error:'Missing "website" column'});
+  
   const replace = String(req.query.replace||'') === '1';
-  if (replace) { store.websites = []; store._ids.website = 0; }
+  if (replace) {
+    await db.collection('websites').deleteMany({});
+  }
+  
   let added=0, updated=0;
   for (let i=1; i<rows.length; i++) {
     const r = rows[i];
@@ -397,24 +290,39 @@ app.post('/api/websites/import', auth(true), adminOnly, (req,res) => {
       notes: idx('notes')>=0 ? (r[idx('notes')]||'').trim() : '',
       featured: idx('featured')>=0 ? (['1','true','yes'].includes((r[idx('featured')]||'').trim().toLowerCase()) ? 1 : 0) : 0,
     };
-    const existing = !replace && store.websites.find(w => w.website.toLowerCase() === website.toLowerCase());
-    if (existing) { Object.assign(existing, data); updated++; }
-    else { store.websites.push({ id: nextId('website'), ...data, views:0, deleted_at:null, created_at: new Date().toISOString() }); added++; }
+    
+    if (!replace) {
+      // Use collation for case-insensitive match if needed, but here simple regex is fine, or standard exact match
+      const existing = await db.collection('websites').findOne({ website: { $regex: new RegExp(`^${website}$`, 'i') } });
+      if (existing) {
+        await db.collection('websites').updateOne({ id: existing.id }, { $set: data });
+        updated++;
+        continue;
+      }
+    }
+    
+    data.id = await nextId('website');
+    data.views = 0;
+    data.deleted_at = null;
+    data.created_at = new Date().toISOString();
+    await db.collection('websites').insertOne(data);
+    added++;
   }
-  saveStore();
-  res.json({ added, updated, total: store.websites.length });
+  const total = await db.collection('websites').countDocuments();
+  res.json({ added, updated, total });
 });
 
-app.get('/api/websites/export', auth(false), (req,res) => {
+app.get('/api/websites/export', auth(false), async (req,res) => {
   const headers = ['id','website','category','price','dr','da','traffic','notes','featured','views','deleted_at','created_at'];
+  const sites = await db.collection('websites').find({ deleted_at: null }).toArray();
   res.setHeader('Content-Type','text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="websites-${todayStr()}.csv"`);
-  res.send(toCSV(store.websites.filter(w => !w.deleted_at), headers));
+  res.send(toCSV(sites, headers));
 });
 
 // ----- Stats / Analytics -----
-app.get('/api/stats', (req,res) => {
-  const ws = store.websites.filter(w => !w.deleted_at);
+app.get('/api/stats', async (req,res) => {
+  const ws = await db.collection('websites').find({ deleted_at: null }).toArray();
   const total = ws.length;
   const totalValue = ws.reduce((s,w)=>s+(w.price||0),0);
   const avgPrice = total ? Math.round(totalValue/total) : 0;
@@ -424,74 +332,78 @@ app.get('/api/stats', (req,res) => {
   const avgDA = total ? Math.round(ws.reduce((s,w)=>s+(w.da||0),0)/total) : 0;
   const byCategory = {};
   for (const w of ws) byCategory[w.category||'Uncategorized'] = (byCategory[w.category||'Uncategorized']||0)+1;
-  res.json({ total, avgPrice, totalValue, minPrice, maxPrice, avgDR, avgDA, byCategory, deleted: store.websites.filter(w=>w.deleted_at).length });
+  const deleted = await db.collection('websites').countDocuments({ deleted_at: { $ne: null } });
+  res.json({ total, avgPrice, totalValue, minPrice, maxPrice, avgDR, avgDA, byCategory, deleted });
 });
 
-// Analytics (admin)
-app.get('/api/analytics', auth(true), adminOnly, (req,res) => {
+app.get('/api/analytics', auth(true), adminOnly, async (req,res) => {
   const days = Number(req.query.days) || 14;
   const today = new Date();
   const series = [];
   for (let i = days-1; i >= 0; i--) {
     const d = new Date(today); d.setDate(d.getDate()-i);
     const key = d.toISOString().slice(0,10);
-    const s = store.daily_stats[key] || {};
+    const s = await db.collection('daily_stats').findOne({ date: key }) || {};
     series.push({ date: key, signups: s.signups||0, inquiries: s.inquiries||0, views: s.views||0, orders: s.orders||0 });
   }
-  // Top viewed
-  const topViewed = store.websites.filter(w => !w.deleted_at && (w.views||0)>0)
-    .sort((a,b) => (b.views||0)-(a.views||0)).slice(0,10).map(w => ({ website: w.website, views: w.views }));
-  // Top inquired
+  
+  const topViewedRaw = await db.collection('websites')
+    .find({ deleted_at: null, views: { $gt: 0 } })
+    .sort({ views: -1 }).limit(10).toArray();
+  const topViewed = topViewedRaw.map(w => ({ website: w.website, views: w.views }));
+  
+  const inquiries = await db.collection('inquiries').find().toArray();
   const inquiryCounts = {};
-  for (const inq of store.inquiries) for (const it of (inq.items||[])) inquiryCounts[it.website] = (inquiryCounts[it.website]||0) + 1;
+  for (const inq of inquiries) for (const it of (inq.items||[])) inquiryCounts[it.website] = (inquiryCounts[it.website]||0) + 1;
   const topInquired = Object.entries(inquiryCounts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([website, count]) => ({ website, count }));
-  // Conversion rate (last 7 days)
+  
   const recent = series.slice(-7);
   const totalViews = recent.reduce((s,r) => s + r.views, 0);
   const totalInq = recent.reduce((s,r) => s + r.inquiries, 0);
   const conversionRate = totalViews ? Math.round((totalInq / totalViews) * 1000) / 10 : 0;
+  
   res.json({
     days, series, topViewed, topInquired,
     summary: {
-      totalUsers: store.users.filter(u=>u.role!=='admin').length,
-      totalWebsites: store.websites.filter(w=>!w.deleted_at).length,
-      totalInquiries: store.inquiries.length,
-      totalOrders: store.orders.length,
+      totalUsers: await db.collection('users').countDocuments({ role: { $ne: 'admin' } }),
+      totalWebsites: await db.collection('websites').countDocuments({ deleted_at: null }),
+      totalInquiries: await db.collection('inquiries').countDocuments(),
+      totalOrders: await db.collection('orders').countDocuments(),
       conversionRate
     }
   });
 });
 
-// ----- Inquiries -----
-app.post('/api/inquiries', auth(false), (req,res) => {
+app.post('/api/inquiries', auth(false), async (req,res) => {
   const { items, total } = req.body || {};
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({error:'No items'});
-  const inq = { id: nextId('inquiry'), username: req.user?.username || 'guest', items, total: Number(total)||0, created_at: new Date().toISOString() };
-  store.inquiries.push(inq); bumpDaily('inquiries'); saveStore();
+  const inq = { id: await nextId('inquiry'), username: req.user?.username || 'guest', items, total: Number(total)||0, created_at: new Date().toISOString() };
+  await db.collection('inquiries').insertOne(inq);
+  await bumpDaily('inquiries');
   res.json({ ok:true, id: inq.id });
 });
 
-app.get('/api/inquiries', auth(true), adminOnly, (req,res) => {
-  res.json([...store.inquiries].sort((a,b) => b.id - a.id));
+app.get('/api/inquiries', auth(true), adminOnly, async (req,res) => {
+  const inquiries = await db.collection('inquiries').find().sort({ id: -1 }).toArray();
+  res.json(cleanArray(inquiries));
 });
 
-app.delete('/api/inquiries/:id', auth(true), adminOnly, (req,res) => {
+app.delete('/api/inquiries/:id', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
-  store.inquiries = store.inquiries.filter(i => i.id !== id);
-  saveStore();
+  await db.collection('inquiries').deleteOne({ id });
   res.json({ ok:true });
 });
 
-// ----- Orders / Quotes -----
 const ORDER_STATUSES = ['pending','approved','paid','delivered','cancelled'];
 
-app.post('/api/orders', auth(true), (req,res) => {
+app.post('/api/orders', auth(true), async (req,res) => {
   const { items, currency, notes } = req.body || {};
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({error:'No items'});
   const total = items.reduce((s,i) => s + (Number(i.price)||0), 0);
+  const orderId = await nextId('order');
   const order = {
-    id: nextId('order'),
-    order_number: 'RS-' + new Date().getFullYear() + '-' + String(nextId('order')).padStart(5,'0').slice(-5).padStart(5,'0'),
+    id: orderId,
+    order_number: 'RS-' + new Date().getFullYear() + '-' + String(orderId).padStart(5,'0'),
     username: req.user.username,
     user_id: req.user.id,
     items, total,
@@ -502,114 +414,105 @@ app.post('/api/orders', auth(true), (req,res) => {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
-  // hack: undo the second nextId increment used for order_number
-  store._ids.order = order.id;
-  order.order_number = 'RS-' + new Date().getFullYear() + '-' + String(order.id).padStart(5,'0');
-  store.orders.push(order); bumpDaily('orders'); saveStore();
-  res.json(order);
+  await db.collection('orders').insertOne(order);
+  await bumpDaily('orders');
+  res.json(cleanOutput(order));
 });
 
-app.get('/api/orders', auth(true), (req,res) => {
+app.get('/api/orders', auth(true), async (req,res) => {
   const isAdmin = req.user.role === 'admin';
-  const list = isAdmin ? store.orders : store.orders.filter(o => o.user_id === req.user.id);
-  res.json([...list].sort((a,b) => b.id - a.id));
+  const query = isAdmin ? {} : { user_id: req.user.id };
+  const orders = await db.collection('orders').find(query).sort({ id: -1 }).toArray();
+  res.json(cleanArray(orders));
 });
 
-app.get('/api/orders/:id', auth(true), (req,res) => {
+app.get('/api/orders/:id', auth(true), async (req,res) => {
   const id = Number(req.params.id);
-  const o = store.orders.find(x => x.id === id);
+  const o = await db.collection('orders').findOne({ id });
   if (!o) return res.status(404).json({error:'Not found'});
   if (req.user.role !== 'admin' && o.user_id !== req.user.id) return res.status(403).json({error:'Forbidden'});
-  res.json(o);
+  res.json(cleanOutput(o));
 });
 
-app.put('/api/orders/:id/status', auth(true), adminOnly, (req,res) => {
+app.put('/api/orders/:id/status', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
   const { status, note } = req.body || {};
   if (!ORDER_STATUSES.includes(status)) return res.status(400).json({error:'Invalid status'});
-  const o = store.orders.find(x => x.id === id);
+  const o = await db.collection('orders').findOne({ id });
   if (!o) return res.status(404).json({error:'Not found'});
-  o.status = status;
-  o.status_history.push({ status, at: new Date().toISOString(), by: req.user.username, note: note||'' });
-  o.updated_at = new Date().toISOString();
-  saveStore();
-  res.json(o);
+  
+  const historyEntry = { status, at: new Date().toISOString(), by: req.user.username, note: note||'' };
+  const updated = await db.collection('orders').findOneAndUpdate(
+    { id },
+    { $set: { status, updated_at: new Date().toISOString() }, $push: { status_history: historyEntry } },
+    { returnDocument: 'after' }
+  );
+  res.json(cleanOutput(updated));
 });
 
-app.delete('/api/orders/:id', auth(true), adminOnly, (req,res) => {
+app.delete('/api/orders/:id', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
-  store.orders = store.orders.filter(o => o.id !== id);
-  saveStore();
+  await db.collection('orders').deleteOne({ id });
   res.json({ ok:true });
 });
 
 // ----- Wishlist -----
-app.get('/api/wishlist', auth(true), (req,res) => {
-  const list = store.wishlists.filter(w => w.user_id === req.user.id);
+app.get('/api/wishlist', auth(true), async (req,res) => {
+  const list = await db.collection('wishlists').find({ user_id: req.user.id }).toArray();
   const websiteIds = list.map(w => w.website_id);
-  const websites = store.websites.filter(w => websiteIds.includes(w.id) && !w.deleted_at);
-  res.json(websites);
+  const websites = await db.collection('websites').find({ id: { $in: websiteIds }, deleted_at: null }).toArray();
+  res.json(cleanArray(websites));
 });
 
-app.post('/api/wishlist/:websiteId', auth(true), (req,res) => {
+app.post('/api/wishlist/:websiteId', auth(true), async (req,res) => {
   const wid = Number(req.params.websiteId);
-  if (!store.websites.find(w => w.id === wid)) return res.status(404).json({error:'Not found'});
-  if (store.wishlists.find(w => w.user_id === req.user.id && w.website_id === wid)) return res.json({ ok:true });
-  store.wishlists.push({ user_id: req.user.id, website_id: wid, added_at: new Date().toISOString() });
-  saveStore();
+  const site = await db.collection('websites').findOne({ id: wid });
+  if (!site) return res.status(404).json({error:'Not found'});
+  await db.collection('wishlists').updateOne(
+    { user_id: req.user.id, website_id: wid },
+    { $set: { user_id: req.user.id, website_id: wid, added_at: new Date().toISOString() } },
+    { upsert: true }
+  );
   res.json({ ok:true });
 });
 
-app.delete('/api/wishlist/:websiteId', auth(true), (req,res) => {
+app.delete('/api/wishlist/:websiteId', auth(true), async (req,res) => {
   const wid = Number(req.params.websiteId);
-  store.wishlists = store.wishlists.filter(w => !(w.user_id === req.user.id && w.website_id === wid));
-  saveStore();
+  await db.collection('wishlists').deleteOne({ user_id: req.user.id, website_id: wid });
   res.json({ ok:true });
 });
 
-// ----- Users -----
-app.get('/api/users', auth(true), adminOnly, (req,res) => {
-  res.json(store.users.map(u => ({
+app.get('/api/users', auth(true), adminOnly, async (req,res) => {
+  const users = await db.collection('users').find().sort({ id: -1 }).toArray();
+  res.json(users.map(u => ({
     id: u.id, username: u.username, role: u.role, email: u.email,
     email_verified: u.email_verified, created_at: u.created_at, last_login: u.last_login
-  })).sort((a,b) => b.id - a.id));
+  })));
 });
 
-app.delete('/api/users/:id', auth(true), adminOnly, (req,res) => {
+app.delete('/api/users/:id', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
   if (id === req.user.id) return res.status(400).json({error:"Can't delete yourself"});
-  store.users = store.users.filter(u => u.id !== id);
-  store.wishlists = store.wishlists.filter(w => w.user_id !== id);
-  saveStore();
+  await db.collection('users').deleteOne({ id });
+  await db.collection('wishlists').deleteMany({ user_id: id });
   res.json({ ok:true });
 });
 
-// ----- Backup -----
-app.get('/api/backup', auth(true), adminOnly, (req,res) => {
+app.get('/api/backup', auth(true), adminOnly, async (req,res) => {
   const snap = {
     generated_at: new Date().toISOString(),
-    counts: {
-      websites: store.websites.filter(w=>!w.deleted_at).length,
-      websites_deleted: store.websites.filter(w=>w.deleted_at).length,
-      users: store.users.length,
-      sub_users: store.users.filter(u=>u.role!=='admin').length,
-      inquiries: store.inquiries.length,
-      orders: store.orders.length,
-      wishlists: store.wishlists.length
-    },
-    websites: store.websites,
-    users: store.users.map(u => ({ id:u.id, username:u.username, role:u.role, email:u.email, created_at:u.created_at, last_login:u.last_login })),
-    inquiries: store.inquiries,
-    orders: store.orders,
-    wishlists: store.wishlists,
-    daily_stats: store.daily_stats
+    websites: cleanArray(await db.collection('websites').find().toArray()),
+    users: cleanArray(await db.collection('users').find().toArray()),
+    inquiries: cleanArray(await db.collection('inquiries').find().toArray()),
+    orders: cleanArray(await db.collection('orders').find().toArray()),
+    wishlists: cleanArray(await db.collection('wishlists').find().toArray()),
+    daily_stats: cleanArray(await db.collection('daily_stats').find().toArray())
   };
   res.setHeader('Content-Type','application/json');
   res.setHeader('Content-Disposition', `attachment; filename="rankshifters-backup-${todayStr()}.json"`);
   res.send(JSON.stringify(snap, null, 2));
 });
 
-// ----- Currency rates (cached, refreshed every 12h) -----
 let currencyCache = { rates: { USD:1, INR:83.5, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51 }, updated: 0 };
 async function refreshRates() {
   try {
@@ -626,9 +529,7 @@ setInterval(refreshRates, 12*60*60*1000);
 
 app.get('/api/rates', (req,res) => res.json(currencyCache));
 
-
-// ----- Smart search (regex-based, no API key needed) -----
-app.post('/api/smart-search', (req, res) => {
+app.post('/api/smart-search', async (req, res) => {
   let q = String(req.body && req.body.query || '').toLowerCase();
   if (!q) return res.json({ filters: {}, count: 0, ids: [] });
   const filters = {};
@@ -641,37 +542,49 @@ app.post('/api/smart-search', (req, res) => {
   if ((m = q.match(/(?:under|below|less than|max)\s*\$?\s*(\d+)/))) { filters.maxPrice = Number(m[1]); q = q.replace(m[0], ' '); }
   if ((m = q.match(/(?:over|above|more than|min)\s*\$?\s*(\d+)/))) { filters.minPrice = Number(m[1]); q = q.replace(m[0], ' '); }
   if ((m = q.match(/between\s*\$?\s*(\d+)\s*(?:and|to|-)\s*\$?\s*(\d+)/))) { filters.minPrice = Number(m[1]); filters.maxPrice = Number(m[2]); q = q.replace(m[0], ' '); }
-  const cats = [...new Set(store.websites.map(w => (w.category||'').toLowerCase()).filter(Boolean))];
-  for (const c of cats) if (q.includes(c)) { filters.category = c; q = q.replace(c, ' '); break; }
+  
   if (/featured|premium|top|best/.test(q)) { filters.featured = true; q = q.replace(/featured|premium|top|best/g, ' '); }
   let text = q.replace(/sites?|websites?|with|and|the|a|an/g, ' ').replace(/\s+/g, ' ').trim();
   if (text.length >= 3) filters.text = text;
-  let r = store.websites.filter(w => !w.deleted_at);
-  if (filters.maxPrice != null) r = r.filter(w => (w.price||0) <= filters.maxPrice);
-  if (filters.minPrice != null) r = r.filter(w => (w.price||0) >= filters.minPrice);
-  if (filters.minDR != null) r = r.filter(w => (w.dr||0) >= filters.minDR);
-  if (filters.maxDR != null) r = r.filter(w => (w.dr||0) <= filters.maxDR);
-  if (filters.minDA != null) r = r.filter(w => (w.da||0) >= filters.minDA);
-  if (filters.maxDA != null) r = r.filter(w => (w.da||0) <= filters.maxDA);
-  if (filters.minTraffic != null) r = r.filter(w => (w.traffic||0) >= filters.minTraffic);
-  if (filters.category) r = r.filter(w => (w.category||'').toLowerCase() === filters.category);
-  if (filters.featured) r = r.filter(w => w.featured);
-  if (filters.text) r = r.filter(w => (w.website||'').toLowerCase().includes(filters.text) || (w.notes||'').toLowerCase().includes(filters.text));
-  res.json({ filters, count: r.length, ids: r.slice(0, 500).map(w => w.id) });
+
+  const mongoQuery = { deleted_at: null };
+  if (filters.maxPrice != null) mongoQuery.price = { ...mongoQuery.price, $lte: filters.maxPrice };
+  if (filters.minPrice != null) mongoQuery.price = { ...mongoQuery.price, $gte: filters.minPrice };
+  if (filters.minDR != null) mongoQuery.dr = { ...mongoQuery.dr, $gte: filters.minDR };
+  if (filters.maxDR != null) mongoQuery.dr = { ...mongoQuery.dr, $lte: filters.maxDR };
+  if (filters.minDA != null) mongoQuery.da = { ...mongoQuery.da, $gte: filters.minDA };
+  if (filters.maxDA != null) mongoQuery.da = { ...mongoQuery.da, $lte: filters.maxDA };
+  if (filters.minTraffic != null) mongoQuery.traffic = { ...mongoQuery.traffic, $gte: filters.minTraffic };
+  if (filters.featured) mongoQuery.featured = 1;
+  if (filters.text) {
+    mongoQuery.$or = [
+      { website: { $regex: filters.text, $options: 'i' } },
+      { notes: { $regex: filters.text, $options: 'i' } }
+    ];
+  }
+  
+  // Actually, wait: category matching requires getting distinct categories first or simple regex if text matches
+  // A simplified approach:
+  const categories = await db.collection('websites').distinct('category');
+  const cats = categories.filter(Boolean).map(c=>c.toLowerCase());
+  for (const c of cats) if (q.includes(c)) { filters.category = c; mongoQuery.category = new RegExp(`^${c}$`, 'i'); q = q.replace(c, ' '); break; }
+
+  const r = await db.collection('websites').find(mongoQuery).limit(500).toArray();
+  res.json({ filters, count: r.length, ids: r.map(w => w.id) });
 });
 
-// ----- Recommendations (similarity scoring) -----
-app.post('/api/recommendations', auth(false), (req,res) => {
+app.post('/api/recommendations', auth(false), async (req,res) => {
   const cartIds = (req.body?.cart_ids || []).map(Number);
   const seedIds = [...new Set(cartIds)];
-  const seedSites = seedIds.map(id => store.websites.find(w => w.id === id && !w.deleted_at)).filter(Boolean);
+  const seedSites = await db.collection('websites').find({ id: { $in: seedIds }, deleted_at: null }).toArray();
   if (seedSites.length === 0) {
-    const trending = [...store.websites].filter(w => !w.deleted_at).sort((a,b) => (b.views||0) - (a.views||0)).slice(0, 6);
-    return res.json({ items: trending });
+    const trending = await db.collection('websites').find({ deleted_at: null }).sort({ views: -1 }).limit(6).toArray();
+    return res.json({ items: cleanArray(trending) });
   }
   const seedCats = [...new Set(seedSites.map(s => s.category).filter(Boolean))];
   const avgPrice = seedSites.reduce((s,w) => s + (w.price||0), 0) / seedSites.length;
-  const candidates = store.websites.filter(w => !w.deleted_at && !seedIds.includes(w.id));
+  const candidates = await db.collection('websites').find({ deleted_at: null, id: { $nin: seedIds } }).toArray();
+  
   const scored = candidates.map(w => {
     let score = 0;
     if (seedCats.includes(w.category)) score += 50;
@@ -682,16 +595,64 @@ app.post('/api/recommendations', auth(false), (req,res) => {
     score += Math.min(20, (w.views || 0));
     return { w, score };
   }).sort((a,b) => b.score - a.score).slice(0, 6).map(x => x.w);
-  res.json({ items: scored });
+  res.json({ items: cleanArray(scored) });
 });
 
-// ----- Trending (alias) -----
-app.get('/api/trending', (req,res) => {
-  const list = [...store.websites].filter(w => !w.deleted_at)
-    .sort((a,b) => (b.views||0) - (a.views||0))
-    .slice(0, 10);
-  res.json(list);
+app.get('/api/trending', async (req,res) => {
+  const list = await db.collection('websites').find({ deleted_at: null }).sort({ views: -1 }).limit(10).toArray();
+  res.json(cleanArray(list));
 });
 
+// START SERVER & SEED DATA
+async function start() {
+  client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  db = client.db('rankshifters');
+  console.log('Connected to MongoDB');
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Server on :${PORT}`));
+  // Sync admin
+  const admin = await db.collection('users').findOne({ username: ADMIN_USERNAME });
+  if (!admin) {
+    await db.collection('users').insertOne({
+      id: await nextId('user'),
+      username: ADMIN_USERNAME,
+      password: bcrypt.hashSync(ADMIN_PASSWORD, 10),
+      role: 'admin',
+      email_verified: true,
+      created_at: new Date().toISOString()
+    });
+    console.log('Admin created');
+  } else {
+    if (!bcrypt.compareSync(ADMIN_PASSWORD, admin.password) || admin.role !== 'admin') {
+      await db.collection('users').updateOne(
+        { id: admin.id },
+        { $set: { password: bcrypt.hashSync(ADMIN_PASSWORD, 10), role: 'admin', email_verified: true } }
+      );
+      console.log('Admin synced');
+    }
+  }
+
+  // Seed demo
+  const siteCount = await db.collection('websites').countDocuments();
+  if (siteCount === 0) {
+    const seed = [
+      ['techbullion.com','Business',25,81,80,71000,'Premium tech publication, Dofollow Backlink'],
+      ['trustpost.org','General',10,25,25,80000000,'Dofollow Backlink'],
+      ['grammarvibe.org','General',20,9,9,1,'Dofollow Backlink'],
+      ['loveequotes.com','General',20,31,31,1,'Dofollow Backlink'],
+      ['grammeroverview.com','General',20,41,41,1,'Dofollow Backlink']
+    ];
+    for (const [website,category,price,dr,da,traffic,notes] of seed) {
+      await db.collection('websites').insertOne({
+        id: await nextId('website'),
+        website, category, price, dr, da, traffic, notes,
+        featured:0, views:0, deleted_at: null, created_at: new Date().toISOString()
+      });
+    }
+    console.log('Seeded demo websites');
+  }
+
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server on :${PORT}`));
+}
+
+start().catch(console.error);
