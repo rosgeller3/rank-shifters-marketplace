@@ -605,10 +605,22 @@ app.get('/api/trending', async (req,res) => {
 
 // START SERVER & SEED DATA
 async function start() {
-  client = new MongoClient(MONGODB_URI);
-  await client.connect();
+  console.log('--- STARTING UP ---');
+  console.log('MONGODB_URI defined:', !!MONGODB_URI);
+  
+  // Add a 5-second timeout so it doesn't hang infinitely
+  client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+  
+  try {
+    console.log('Attempting to connect to MongoDB...');
+    await client.connect();
+    console.log('Connected to MongoDB successfully!');
+  } catch (err) {
+    console.error('CRITICAL ERROR: Failed to connect to MongoDB!', err);
+    process.exit(1); // Force crash so Render logs it immediately
+  }
+  
   db = client.db('rankshifters');
-  console.log('Connected to MongoDB');
 
   // Sync admin
   const admin = await db.collection('users').findOne({ username: ADMIN_USERNAME });
