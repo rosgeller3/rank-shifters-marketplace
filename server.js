@@ -87,6 +87,7 @@ function normalizeWebsite(b={}) {
     dr: Number(b.dr)||0,
     da: Number(b.da)||0,
     traffic: Number(b.traffic)||0,
+    link_type: String(b.link_type||'dofollow').trim().toLowerCase(),
     notes: String(b.notes||'').trim(),
     featured: b.featured ? 1 : 0,
   };
@@ -288,6 +289,7 @@ app.post('/api/websites/import', auth(true), adminOnly, async (req,res) => {
       dr: idx('dr')>=0 ? Number(r[idx('dr')])||0 : 0,
       da: idx('da')>=0 ? Number(r[idx('da')])||0 : 0,
       traffic: idx('traffic')>=0 ? Number(r[idx('traffic')])||0 : 0,
+      link_type: idx('link type')>=0 ? (r[idx('link type')]||'dofollow').trim().toLowerCase() : (idx('link_type')>=0 ? (r[idx('link_type')]||'dofollow').trim().toLowerCase() : 'dofollow'),
       notes: idx('notes')>=0 ? (r[idx('notes')]||'').trim() : '',
       featured: idx('featured')>=0 ? (['1','true','yes'].includes((r[idx('featured')]||'').trim().toLowerCase()) ? 1 : 0) : 0,
     };
@@ -314,11 +316,77 @@ app.post('/api/websites/import', auth(true), adminOnly, async (req,res) => {
 });
 
 app.get('/api/websites/export', auth(false), async (req,res) => {
-  const headers = ['id','website','category','price','dr','da','traffic','notes','featured','views','deleted_at','created_at'];
+  const headers = ['id','website','category','price','dr','da','traffic','link_type','notes','featured','views','deleted_at','created_at'];
   const sites = await db.collection('websites').find({ deleted_at: null }).toArray();
   res.setHeader('Content-Type','text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="websites-${todayStr()}.csv"`);
   res.send(toCSV(sites, headers));
+});
+
+// ----- Settings & Sync -----
+app.get('/api/settings', auth(true), adminOnly, async (req,res) => {
+  const s = await db.collection('settings').findOne({ id: 'config' }) || {};
+  res.json({ google_sheet_url: s.google_sheet_url || '' });
+});
+
+app.post('/api/settings', auth(true), adminOnly, async (req,res) => {
+  const { google_sheet_url } = req.body || {};
+  await db.collection('settings').updateOne(
+    { id: 'config' },
+    { $set: { google_sheet_url: String(google_sheet_url||'').trim(), updated_at: new Date().toISOString() } },
+    { upsert: true }
+  );
+  res.json({ ok: true });
+});
+
+app.post('/api/websites/sync-sheet', auth(true), adminOnly, async (req,res) => {
+  const s = await db.collection('settings').findOne({ id: 'config' });
+  if (!s || !s.google_sheet_url) return res.status(400).json({error: 'Google Sheet URL not configured.'});
+  
+  try {
+    const fetchRes = await fetch(s.google_sheet_url);
+    if (!fetchRes.ok) throw new Error('Failed to fetch from Google Sheet URL');
+    const csv = await fetchRes.text();
+    
+    const rows = parseCSV(csv.trim());
+    if (rows.length < 2) return res.status(400).json({error:'CSV needs header + rows'});
+    const headers = rows[0].map(h => h.trim().toLowerCase());
+    const idx = name => headers.indexOf(name);
+    const wIdx = idx('website');
+    if (wIdx < 0) return res.status(400).json({error:'Missing "website" column'});
+    
+    // Always replace everything on sync
+    await db.collection('websites').deleteMany({});
+    
+    let added = 0;
+    for (let i=1; i<rows.length; i++) {
+      const r = rows[i];
+      const website = (r[wIdx]||'').trim();
+      if (!website) continue;
+      
+      const data = {
+        id: await nextId('website'),
+        website,
+        category: idx('category')>=0 ? (r[idx('category')]||'').trim() : '',
+        price: idx('price')>=0 ? Number(r[idx('price')])||0 : 0,
+        dr: idx('dr')>=0 ? Number(r[idx('dr')])||0 : 0,
+        da: idx('da')>=0 ? Number(r[idx('da')])||0 : 0,
+        traffic: idx('traffic')>=0 ? Number(r[idx('traffic')])||0 : 0,
+        link_type: idx('link type')>=0 ? (r[idx('link type')]||'dofollow').trim().toLowerCase() : (idx('link_type')>=0 ? (r[idx('link_type')]||'dofollow').trim().toLowerCase() : 'dofollow'),
+        notes: idx('notes')>=0 ? (r[idx('notes')]||'').trim() : '',
+        featured: idx('featured')>=0 ? (['1','true','yes'].includes((r[idx('featured')]||'').trim().toLowerCase()) ? 1 : 0) : 0,
+        views: 0,
+        deleted_at: null,
+        created_at: new Date().toISOString()
+      };
+      await db.collection('websites').insertOne(data);
+      added++;
+    }
+    
+    res.json({ added, total: added });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ----- Stats / Analytics -----

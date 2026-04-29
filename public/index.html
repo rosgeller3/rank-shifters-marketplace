@@ -121,6 +121,10 @@
     <button id="addBtn" class="px-3 py-2 text-sm bg-brand hover:bg-brand-dark text-white rounded-lg">+ Add Website</button>
     <button id="importBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Import CSV</button>
     <button id="exportBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Export CSV</button>
+    <button id="syncSheetBtn" class="px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-1">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Sync Google Sheet
+    </button>
+    <button id="settingsBtn" class="px-3 py-2 text-sm bg-white border rounded-lg hover:bg-slate-50">Settings</button>
     <button id="bulkEditBtn" class="hidden px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg">Bulk Edit (<span id="bulkCount">0</span>)</button>
     <button id="bulkDeleteBtn" class="hidden px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg">Delete Selected</button>
   </div>
@@ -138,6 +142,7 @@
             <th class="text-right px-4 py-3">DR</th>
             <th class="text-right px-4 py-3">DA</th>
             <th class="text-right px-4 py-3">Traffic</th>
+            <th class="text-center px-4 py-3">Link Type</th>
             <th class="text-right px-4 py-3 hidden" id="viewsCol">Views</th>
             <th class="text-left px-4 py-3">Notes</th>
             <th class="text-right px-4 py-3">Action</th>
@@ -286,6 +291,10 @@
         <input id="f_dr" type="number" placeholder="DR" class="border rounded-lg px-3 py-2" />
         <input id="f_da" type="number" placeholder="DA" class="border rounded-lg px-3 py-2" />
       </div>
+      <select id="f_link_type" class="w-full border rounded-lg px-3 py-2">
+        <option value="dofollow">Dofollow</option>
+        <option value="nofollow">Nofollow</option>
+      </select>
       <textarea id="f_notes" placeholder="Notes" class="w-full border rounded-lg px-3 py-2 h-20"></textarea>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="f_featured"/> Featured</label>
       <div class="flex gap-2 justify-end">
@@ -349,6 +358,22 @@
       <div class="flex gap-2 justify-end mt-2">
         <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
         <button class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit">Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-md p-5 shadow-xl">
+    <h3 class="font-semibold mb-3">Google Sheets Sync Configuration</h3>
+    <p class="text-sm text-slate-500 mb-4">Paste your published Google Sheet CSV URL below to enable 1-click sync.</p>
+    <form id="settingsForm" class="space-y-3">
+      <input id="f_google_sheet_url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="w-full border rounded-lg px-3 py-2 text-sm" />
+      <div class="flex gap-2 justify-end mt-2">
+        <button type="button" data-close class="px-3 py-2 rounded-lg border text-sm">Cancel</button>
+        <button class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white text-sm" type="submit">Save</button>
       </div>
     </form>
   </div>
@@ -616,6 +641,7 @@ function renderRows() {
         <td class="px-4 py-3 text-right">${w.dr||'-'}</td>
         <td class="px-4 py-3 text-right">${w.da||'-'}</td>
         <td class="px-4 py-3 text-right text-slate-600">${fmtNum(w.traffic)}</td>
+        <td class="px-4 py-3 text-center"><span class="badge ${w.link_type==='nofollow'?'bg-red-100 text-red-700':'bg-green-100 text-green-700'} uppercase">${w.link_type||'dofollow'}</span></td>
         ${isAdmin ? `<td class="px-4 py-3 text-right text-slate-500">${fmtNum(w.views||0)}</td>` : ''}
         <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${(w.notes||'').replace(/"/g,'&quot;')}">${w.notes||''}</td>
         <td class="px-4 py-3 text-right whitespace-nowrap">
@@ -651,10 +677,11 @@ function renderRows() {
           </div>
           <div class="text-lg font-bold">${fmtMoney(w.price)}</div>
         </div>
-        <div class="grid grid-cols-3 gap-2 text-xs text-slate-600 mb-3 bg-slate-50 rounded p-2">
-          <div><span class="text-slate-400">DR</span> ${w.dr||'-'}</div>
-          <div><span class="text-slate-400">DA</span> ${w.da||'-'}</div>
-          <div><span class="text-slate-400">Traffic</span> ${fmtNum(w.traffic)}</div>
+        <div class="grid grid-cols-4 gap-2 text-xs text-slate-600 mb-3 bg-slate-50 rounded p-2 text-center">
+          <div><span class="block text-slate-400">DR</span> ${w.dr||'-'}</div>
+          <div><span class="block text-slate-400">DA</span> ${w.da||'-'}</div>
+          <div><span class="block text-slate-400">Traffic</span> ${fmtNum(w.traffic)}</div>
+          <div><span class="block text-slate-400">Link</span> ${w.link_type==='nofollow'?'<span class="text-red-600">NF</span>':'<span class="text-green-600">DF</span>'}</div>
         </div>
         ${w.notes?`<p class="text-xs text-slate-600 mb-3">${w.notes}</p>`:''}
         ${state.user && state.user.role === 'user' ? `
@@ -1042,6 +1069,7 @@ function openEdit(w) {
   $('#f_dr').value = w?.dr??'';
   $('#f_da').value = w?.da??'';
   $('#f_traffic').value = w?.traffic??'';
+  $('#f_link_type').value = w?.link_type||'dofollow';
   $('#f_notes').value = w?.notes||'';
   $('#f_featured').checked = !!w?.featured;
   $('#editModal').classList.remove('hidden');
@@ -1054,7 +1082,8 @@ $('#editForm').onsubmit = async (e) => {
   const payload = {
     website: $('#f_website').value.trim(), category: $('#f_category').value.trim(),
     price: $('#f_price').value, dr: $('#f_dr').value, da: $('#f_da').value,
-    traffic: $('#f_traffic').value, notes: $('#f_notes').value.trim(),
+    traffic: $('#f_traffic').value, link_type: $('#f_link_type').value,
+    notes: $('#f_notes').value.trim(),
     featured: $('#f_featured').checked
   };
   const id = $('#editId').value;
@@ -1244,6 +1273,43 @@ window.deleteRequest = async (id) => {
     toast('Deleted', 'success');
     loadRequestsTab();
   } catch(e) { toast(e.message, 'error'); }
+};
+
+// ----- Google Sheets Sync & Settings -----
+$('#settingsBtn').onclick = async () => {
+  try {
+    const s = await api('/api/settings');
+    $('#f_google_sheet_url').value = s.google_sheet_url || '';
+    $('#settingsModal').classList.remove('hidden');
+  } catch(e) { toast('Error loading settings', 'error'); }
+};
+
+$('#settingsForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const url = $('#f_google_sheet_url').value.trim();
+  try {
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ google_sheet_url: url }) });
+    $('#settingsModal').classList.add('hidden');
+    toast('Settings saved', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+$('#syncSheetBtn').onclick = async () => {
+  if (!confirm('This will REPLACE all existing inventory with the Google Sheet data. Are you sure?')) return;
+  const btn = $('#syncSheetBtn');
+  const ogText = btn.innerHTML;
+  btn.innerHTML = 'Syncing...';
+  btn.disabled = true;
+  try {
+    const res = await api('/api/websites/sync-sheet', { method: 'POST' });
+    toast(`Successfully synced ${res.added} websites!`, 'success');
+    loadWebsites();
+  } catch(e) {
+    toast(e.message || 'Failed to sync. Check settings.', 'error');
+  } finally {
+    btn.innerHTML = ogText;
+    btn.disabled = false;
+  }
 };
 
 </script>
