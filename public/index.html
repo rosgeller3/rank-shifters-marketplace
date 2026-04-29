@@ -427,6 +427,17 @@
 <!-- Toast -->
 <div id="toast" class="hidden fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg"></div>
 
+<!-- FOMO Popup -->
+<div id="fomoPopup" class="fixed bottom-4 left-4 z-40 bg-white/90 backdrop-blur-md border rounded-xl shadow-xl p-3 flex items-start gap-3 transform transition-all duration-500 translate-y-20 opacity-0 pointer-events-none max-w-sm">
+  <div class="bg-brand/10 text-brand rounded-full p-2 mt-0.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+  </div>
+  <div>
+    <div id="fomoText" class="text-sm text-slate-700 leading-tight"></div>
+    <div class="text-xs text-slate-400 mt-1">Just now</div>
+  </div>
+</div>
+
 <script>
 const getC = (n) => { const m = document.cookie.match(new RegExp('(^| )'+n+'=([^;]+)')); return m?decodeURIComponent(m[2]):null; };
 const setC = (n,v) => document.cookie = `${n}=${encodeURIComponent(v)}; max-age=31536000; path=/; SameSite=None; Secure`;
@@ -1321,6 +1332,39 @@ $('#syncSheetBtn').onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// ----- FOMO Popups -----
+const fomoLocs = ['London', 'New York', 'Dubai', 'Sydney', 'Toronto', 'Berlin', 'Singapore', 'Chicago', 'Los Angeles', 'Mumbai', 'Paris'];
+const fomoNiches = ['Tech', 'Health', 'Finance', 'Crypto', 'Business', 'Lifestyle', 'Real Estate', 'Gaming'];
+const fomoActions = [
+  (loc, niche) => `Someone in <b>${loc}</b> just added a <b>${niche}</b> website to their cart.`,
+  (loc, niche) => `An agency in <b>${loc}</b> just requested a custom site in the <b>${niche}</b> niche.`,
+  (loc, niche) => `Someone in <b>${loc}</b> is currently viewing inventory in the <b>${niche}</b> niche.`,
+  (loc, niche) => `A buyer in <b>${loc}</b> just inquired about a guest post with DR 50+.`,
+  (loc, niche) => `Someone in <b>${loc}</b> added 3 high-traffic sites to their cart.`
+];
+
+function showFomo() {
+  const loc = fomoLocs[Math.floor(Math.random() * fomoLocs.length)];
+  const niche = fomoNiches[Math.floor(Math.random() * fomoNiches.length)];
+  const action = fomoActions[Math.floor(Math.random() * fomoActions.length)];
+  
+  $('#fomoText').innerHTML = action(loc, niche);
+  const el = $('#fomoPopup');
+  
+  // Slide up and fade in
+  el.classList.remove('translate-y-20', 'opacity-0');
+  
+  // Hide after 5 seconds
+  setTimeout(() => {
+    el.classList.add('translate-y-20', 'opacity-0');
+    // Schedule next one between 15 and 45 seconds
+    setTimeout(showFomo, Math.floor(Math.random() * 30000) + 15000);
+  }, 5000);
+}
+
+// Start FOMO sequence 10 seconds after load
+setTimeout(showFomo, 10000);
 
 </script>
 </body>
