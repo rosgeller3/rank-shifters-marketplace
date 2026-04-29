@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER || '919712565375';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ayushshahjs1_db_user:6zccYoeWN8bG96dg@marketplace.9ntgvlp.mongodb.net/?appName=marketplace';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
