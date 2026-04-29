@@ -417,19 +417,18 @@
 <div id="orderModal" class="hidden fixed inset-0 z-50 grid place-items-center p-4">
   <div class="absolute inset-0 bg-black/50" data-close></div>
   <div class="relative bg-white rounded-xl w-full max-w-2xl p-5 shadow-xl max-h-[90vh] overflow-y-auto">
-    <div id="orderDetail">Loading...</div>
-  </div>
-</div>
-
 <!-- Toast -->
 <div id="toast" class="hidden fixed bottom-4 right-4 z-50 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg shadow-lg"></div>
 
 <script>
+const getC = (n) => { const m = document.cookie.match(new RegExp('(^| )'+n+'=([^;]+)')); return m?decodeURIComponent(m[2]):null; };
+const setC = (n,v) => document.cookie = `${n}=${encodeURIComponent(v)}; max-age=31536000; path=/; SameSite=None; Secure`;
+
 const state = {
-  token: localStorage.getItem('token'),
-  user: JSON.parse(localStorage.getItem('user') || 'null'),
-  cart: JSON.parse(localStorage.getItem('cart') || '[]'),
-  wishlistIds: JSON.parse(localStorage.getItem('wishlistIds') || '[]'),
+  token: localStorage.getItem('token') || getC('rs_token') || null,
+  user: JSON.parse(localStorage.getItem('user') || getC('rs_user') || 'null'),
+  cart: JSON.parse(localStorage.getItem('cart') || getC('rs_cart') || '[]'),
+  wishlistIds: JSON.parse(localStorage.getItem('wishlistIds') || getC('rs_wish') || '[]'),
   websites: [],
   categories: new Set(),
   selected: new Set(),
@@ -437,10 +436,10 @@ const state = {
   authTab: 'login',
   page: 1,
   pageSize: parseInt(localStorage.getItem('pageSize') || '50', 10),
-  currency: localStorage.getItem('currency') || 'USD',
+  currency: localStorage.getItem('currency') || getC('rs_cur') || 'USD',
   rates: { USD:1, INR:83.5, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51 },
   currentTab: 'catalog',
-  sessionId: localStorage.getItem('sessionId') || (()=>{const s=Math.random().toString(36).substring(2);localStorage.setItem('sessionId',s);return s;})()
+  sessionId: localStorage.getItem('sessionId') || getC('rs_sid') || (()=>{const s=Math.random().toString(36).substring(2);localStorage.setItem('sessionId',s);setC('rs_sid',s);return s;})()
 };
 
 const $ = (s) => document.querySelector(s);
@@ -509,8 +508,9 @@ function renderUserArea() {
     </div>`;
     $('#logoutBtn').onclick = () => {
       localStorage.removeItem('token'); localStorage.removeItem('user');
+      setC('rs_token', ''); setC('rs_user', '');
       state.token=null; state.user=null; state.selected.clear(); state.wishlistIds=[];
-      localStorage.removeItem('wishlistIds');
+      localStorage.removeItem('wishlistIds'); setC('rs_wish', '');
       renderUserArea(); showTab('catalog'); renderRows();
     };
   } else {
@@ -720,6 +720,7 @@ function toggleCart(id) {
 window.toggleCart = toggleCart;
 function saveCart() { 
   localStorage.setItem('cart', JSON.stringify(state.cart)); 
+  setC('rs_cart', JSON.stringify(state.cart));
   $('#cartCount').textContent = state.cart.length; 
   api('/api/cart/sync', { method: 'POST', body: JSON.stringify({ items: state.cart }) }).catch(()=>{});
 }
@@ -741,6 +742,7 @@ async function loadWishlist() {
     const list = await api('/api/wishlist');
     state.wishlistIds = list.map(w => w.id);
     localStorage.setItem('wishlistIds', JSON.stringify(state.wishlistIds));
+    setC('rs_wish', JSON.stringify(state.wishlistIds));
     $('#wishlistCount').textContent = state.wishlistIds.length;
   } catch{}
 }
@@ -751,6 +753,7 @@ async function toggleWishlist(id) {
     if (has) { await api('/api/wishlist/'+id, {method:'DELETE'}); state.wishlistIds = state.wishlistIds.filter(x=>x!==id); }
     else { await api('/api/wishlist/'+id, {method:'POST'}); state.wishlistIds.push(id); }
     localStorage.setItem('wishlistIds', JSON.stringify(state.wishlistIds));
+    setC('rs_wish', JSON.stringify(state.wishlistIds));
     $('#wishlistCount').textContent = state.wishlistIds.length;
     renderRows();
     if (state.currentTab === 'wishlist') loadWishlistTab();
@@ -1005,9 +1008,11 @@ $('#authForm').onsubmit = async (e) => {
     const body = { username: $('#authUser').value.trim(), password: $('#authPass').value };
     if (state.authTab === 'register') body.email = $('#authEmail').value.trim();
     const data = await api(path, { method:'POST', body: JSON.stringify(body) });
-    state.token = data.token; state.user = data.user;
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    setC('rs_token', data.token);
+    setC('rs_user', JSON.stringify(data.user));
+    state.token = data.token; state.user = data.user;
     $('#authModal').classList.add('hidden'); $('#authForm').reset();
     renderUserArea(); renderRows();
     toast(state.authTab==='login'?'Welcome back':'Account created', 'success');
@@ -1031,11 +1036,7 @@ $('#wishlistBtn').onclick = () => showTab('wishlist');
 
 // Currency
 $('#currency').value = state.currency;
-$('#currency').addEventListener('change', () => {
-  state.currency = $('#currency').value;
-  localStorage.setItem('currency', state.currency);
-  renderRows(); renderCart(); loadStats();
-});
+$('#currency').onchange = () => { state.currency = $('#currency').value; localStorage.setItem('currency', state.currency); setC('rs_cur', state.currency); renderRows(); renderCart(); loadStats(); };
 
 // Filters
 ['search','categoryFilter','sortBy','minPrice','maxPrice'].forEach(id =>
