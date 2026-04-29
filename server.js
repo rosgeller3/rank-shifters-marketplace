@@ -326,14 +326,19 @@ app.get('/api/websites/export', auth(false), async (req,res) => {
 // ----- Settings & Sync -----
 app.get('/api/settings', auth(true), adminOnly, async (req,res) => {
   const s = await db.collection('settings').findOne({ id: 'config' }) || {};
-  res.json({ google_sheet_url: s.google_sheet_url || '' });
+  res.json({ google_sheet_url: s.google_sheet_url || '', google_script_url: s.google_script_url || '' });
 });
 
 app.post('/api/settings', auth(true), adminOnly, async (req,res) => {
-  const { google_sheet_url } = req.body || {};
+  const { google_sheet_url, google_script_url } = req.body || {};
   await db.collection('settings').updateOne(
     { id: 'config' },
-    { $set: { google_sheet_url: String(google_sheet_url||'').trim(), updated_at: new Date().toISOString() } },
+    { $set: { 
+        google_sheet_url: String(google_sheet_url||'').trim(), 
+        google_script_url: String(google_script_url||'').trim(),
+        updated_at: new Date().toISOString() 
+      } 
+    },
     { upsert: true }
   );
   res.json({ ok: true });
@@ -485,6 +490,27 @@ app.post('/api/requests', auth(false), async (req,res) => {
     created_at: new Date().toISOString()
   };
   await db.collection('requests').insertOne(request);
+  
+  // Forward to Google Apps Script if configured
+  try {
+    const s = await db.collection('settings').findOne({ id: 'config' });
+    if (s && s.google_script_url) {
+      fetch(s.google_script_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          Name: request.username,
+          Email: request.email,
+          Website_Niche: niche,
+          Budget: budget,
+          DR: dr,
+          Traffic: traffic,
+          Notes: notes
+        })
+      }).catch(err => console.error('Webhook Error:', err));
+    }
+  } catch(e) {}
+  
   res.json({ ok:true, id: request.id });
 });
 

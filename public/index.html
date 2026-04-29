@@ -370,7 +370,14 @@
     <h3 class="font-semibold mb-3">Google Sheets Sync Configuration</h3>
     <p class="text-sm text-slate-500 mb-4">Paste your published Google Sheet CSV URL below to enable 1-click sync.</p>
     <form id="settingsForm" class="space-y-3">
-      <input id="f_google_sheet_url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="w-full border rounded-lg px-3 py-2 text-sm" />
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Google Sheet CSV URL (For Inventory Sync)</label>
+        <input id="f_google_sheet_url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Apps Script Webhook URL (For Custom Requests)</label>
+        <input id="f_google_script_url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
       <div class="flex gap-2 justify-end mt-2">
         <button type="button" data-close class="px-3 py-2 rounded-lg border text-sm">Cancel</button>
         <button class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white text-sm" type="submit">Save</button>
@@ -1281,6 +1288,7 @@ $('#settingsBtn').onclick = async () => {
   try {
     const s = await api('/api/settings');
     $('#f_google_sheet_url').value = s.google_sheet_url || '';
+    $('#f_google_script_url').value = s.google_script_url || '';
     $('#settingsModal').classList.remove('hidden');
   } catch(e) { toast('Error loading settings', 'error'); }
 };
@@ -1288,8 +1296,9 @@ $('#settingsBtn').onclick = async () => {
 $('#settingsForm').onsubmit = async (e) => {
   e.preventDefault();
   const url = $('#f_google_sheet_url').value.trim();
+  const scriptUrl = $('#f_google_script_url').value.trim();
   try {
-    await api('/api/settings', { method: 'POST', body: JSON.stringify({ google_sheet_url: url }) });
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ google_sheet_url: url, google_script_url: scriptUrl }) });
     $('#settingsModal').classList.add('hidden');
     toast('Settings saved', 'success');
   } catch(e) { toast(e.message, 'error'); }
