@@ -63,6 +63,7 @@
     <button class="tab-btn hidden" data-tab="adminOrders" id="tabAdminOrders">Orders</button>
     <button class="tab-btn hidden" data-tab="inquiries" id="tabInquiries">Inquiries</button>
     <button class="tab-btn hidden" data-tab="analytics" id="tabAnalytics">Analytics</button>
+    <button class="tab-btn hidden" data-tab="requests" id="tabRequests">Custom Requests</button>
     <button class="tab-btn hidden" data-tab="users" id="tabUsers">Users</button>
     <button class="tab-btn hidden" data-tab="trash" id="tabTrash">Trash</button>
   </div>
@@ -95,7 +96,10 @@
 
   <!-- Filters -->
   <div class="bg-white border rounded-xl p-4 mb-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-    <input id="search" placeholder="Search website or notes..." class="border rounded-lg px-3 py-2 md:col-span-2" />
+    <div class="md:col-span-2 flex gap-2">
+      <input id="search" placeholder="Search website or notes..." class="flex-1 border rounded-lg px-3 py-2" />
+      <button id="reqSiteBtn" class="px-3 py-2 text-sm bg-slate-800 hover:bg-slate-900 text-white rounded-lg whitespace-nowrap">Request Site</button>
+    </div>
           <div id="smartHint" class="hidden text-xs text-emerald-700 mt-1 px-1"></div>
     <select id="categoryFilter" class="border rounded-lg px-3 py-2"><option value="">All categories</option></select>
     <select id="sortBy" class="border rounded-lg px-3 py-2">
@@ -204,12 +208,20 @@
       <div class="bg-white border rounded-xl p-4"><h3 class="text-sm font-semibold mb-2">Most Viewed Websites</h3><canvas id="topViewedChart"></canvas></div>
       <div class="bg-white border rounded-xl p-4 md:col-span-2"><h3 class="text-sm font-semibold mb-2">Most Inquired Websites</h3><canvas id="topInquiredChart"></canvas></div>
     </div>
+    <h2 class="text-xl font-semibold mt-8 mb-4 text-red-600">Recently Abandoned Carts (Inactive > 1 hr)</h2>
+    <div id="abandonedCartsView" class="space-y-3"></div>
   </section>
 
   <!-- ============ USERS TAB ============ -->
   <section id="usersTab" class="tab-content hidden">
     <h2 class="text-xl font-semibold mb-4">Users</h2>
     <div id="usersView" class="bg-white border rounded-xl p-4">Loading...</div>
+  </section>
+
+  <!-- ============ REQUESTS TAB ============ -->
+  <section id="requestsTab" class="tab-content hidden">
+    <h2 class="text-xl font-semibold mb-4">Custom Site Requests</h2>
+    <div id="requestsView" class="bg-white border rounded-xl p-4">Loading...</div>
   </section>
 
   <!-- ============ TRASH TAB ============ -->
@@ -319,6 +331,29 @@
   </div>
 </div>
 
+<!-- Request Site modal -->
+<div id="requestModal" class="hidden fixed inset-0 z-50 grid place-items-center">
+  <div class="absolute inset-0 bg-black/50" data-close></div>
+  <div class="relative bg-white rounded-xl w-full max-w-md p-5 shadow-xl">
+    <h3 class="font-semibold mb-3">Request Custom Site</h3>
+    <p class="text-sm text-slate-500 mb-4">Can't find what you need? Tell us what you're looking for and we'll source it for you.</p>
+    <form id="requestForm" class="space-y-3">
+      <input id="reqEmail" placeholder="Your Email Address" type="email" class="w-full border rounded-lg px-3 py-2" required />
+      <input id="reqNiche" placeholder="Niche / Category required" class="w-full border rounded-lg px-3 py-2" required />
+      <div class="grid grid-cols-2 gap-3">
+        <input id="reqDR" type="number" placeholder="Min DR" class="border rounded-lg px-3 py-2" />
+        <input id="reqTraffic" type="number" placeholder="Min Traffic" class="border rounded-lg px-3 py-2" />
+      </div>
+      <input id="reqBudget" type="number" placeholder="Target Budget ($)" class="w-full border rounded-lg px-3 py-2" />
+      <textarea id="reqNotes" placeholder="Any specific requirements?" class="w-full border rounded-lg px-3 py-2 h-20"></textarea>
+      <div class="flex gap-2 justify-end mt-2">
+        <button type="button" data-close class="px-3 py-2 rounded-lg border">Cancel</button>
+        <button class="px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white" type="submit">Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Import modal -->
 <div id="importModal" class="hidden fixed inset-0 z-50 grid place-items-center">
   <div class="absolute inset-0 bg-black/50" data-close></div>
@@ -380,6 +415,7 @@ const state = {
   currency: localStorage.getItem('currency') || 'USD',
   rates: { USD:1, INR:83.5, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51 },
   currentTab: 'catalog',
+  sessionId: localStorage.getItem('sessionId') || (()=>{const s=Math.random().toString(36).substring(2);localStorage.setItem('sessionId',s);return s;})()
 };
 
 const $ = (s) => document.querySelector(s);
@@ -388,6 +424,7 @@ const $$ = (s) => document.querySelectorAll(s);
 function api(path, opts={}) {
   const headers = { 'Content-Type':'application/json', ...(opts.headers||{}) };
   if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  if (state.sessionId) headers['x-session-id'] = state.sessionId;
   return fetch(path, { ...opts, headers }).then(async r => {
     const ct = r.headers.get('content-type') || '';
     const data = ct.includes('json') ? await r.json().catch(()=>({})) : await r.text();
@@ -428,6 +465,7 @@ function showTab(tab) {
   if (tab === 'adminOrders') loadAdminOrders();
   if (tab === 'inquiries') loadInquiries();
   if (tab === 'analytics') loadAnalytics();
+  if (tab === 'requests') loadRequestsTab();
   if (tab === 'users') loadUsersTab();
   if (tab === 'trash') loadTrash();
 }
@@ -461,6 +499,7 @@ function renderUserArea() {
   $('#tabAdminOrders').classList.toggle('hidden', !isAdmin);
   $('#tabInquiries').classList.toggle('hidden', !isAdmin);
   $('#tabAnalytics').classList.toggle('hidden', !isAdmin);
+  $('#tabRequests').classList.toggle('hidden', !isAdmin);
   $('#tabUsers').classList.toggle('hidden', !isAdmin);
   $('#tabTrash').classList.toggle('hidden', !isAdmin);
   $('#tabWishlist').classList.toggle('hidden', !isUser && !isAdmin);
@@ -652,7 +691,11 @@ function toggleCart(id) {
   saveCart(); renderRows(); renderCart();
 }
 window.toggleCart = toggleCart;
-function saveCart() { localStorage.setItem('cart', JSON.stringify(state.cart)); $('#cartCount').textContent = state.cart.length; }
+function saveCart() { 
+  localStorage.setItem('cart', JSON.stringify(state.cart)); 
+  $('#cartCount').textContent = state.cart.length; 
+  api('/api/cart/sync', { method: 'POST', body: JSON.stringify({ items: state.cart }) }).catch(()=>{});
+}
 function renderCart() {
   $('#cartCount').textContent = state.cart.length;
   $('#cartItemCount').textContent = state.cart.length;
@@ -857,6 +900,22 @@ async function loadAnalytics() {
       data:{ labels: a.topInquired.map(x=>x.website), datasets:[{label:'Inquiries', data:a.topInquired.map(x=>x.count), backgroundColor:'#f59e0b'}] },
       options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} }
     });
+    
+    if (a.abandonedCarts && a.abandonedCarts.length > 0) {
+      $('#abandonedCartsView').innerHTML = a.abandonedCarts.map(c => `
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-medium text-red-800">User: ${c.username}</span>
+            <span class="text-xs text-red-600 font-semibold">Last active: ${new Date(c.updated_at).toLocaleString()}</span>
+          </div>
+          <ul class="text-sm text-red-700 list-disc list-inside">
+            ${c.items.map(it => `<li>${it.website} - ${fmtMoney(it.price)}</li>`).join('')}
+          </ul>
+        </div>
+      `).join('');
+    } else {
+      $('#abandonedCartsView').innerHTML = '<p class="text-slate-500">No abandoned carts right now.</p>';
+    }
   } catch(e) { $('#analyticsKPIs').textContent = e.message; }
 }
 
@@ -1133,6 +1192,59 @@ init();
   // Refresh recs when cart changes
   window.addEventListener('storage', (e) => { if (e.key === 'cart') loadRecs(); });
 })();
+
+// ----- Custom Requests -----
+$('#reqSiteBtn').onclick = () => {
+  $('#requestForm').reset();
+  if (state.user && state.user.email) $('#reqEmail').value = state.user.email;
+  $('#requestModal').classList.remove('hidden');
+};
+$('#requestForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const payload = {
+    email: $('#reqEmail').value.trim(),
+    niche: $('#reqNiche').value.trim(),
+    dr: $('#reqDR').value,
+    traffic: $('#reqTraffic').value,
+    budget: $('#reqBudget').value,
+    notes: $('#reqNotes').value.trim(),
+  };
+  try {
+    await api('/api/requests', { method: 'POST', body: JSON.stringify(payload) });
+    $('#requestModal').classList.add('hidden');
+    toast('Request submitted successfully!', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+};
+async function loadRequestsTab() {
+  try {
+    const list = await api('/api/requests');
+    const el = $('#requestsView');
+    if (!list.length) el.innerHTML = '<p class="text-slate-500">No requests.</p>';
+    else {
+      el.innerHTML = '<div class="space-y-3">' + list.map(r => `
+        <div class="border rounded-lg p-4 bg-slate-50 relative">
+          <button onclick="deleteRequest(${r.id})" class="absolute top-4 right-4 text-xs text-red-500 hover:text-red-700 font-medium bg-red-50 px-2 py-1 rounded">Delete</button>
+          <div class="font-medium text-slate-800">${r.niche} <span class="text-xs text-slate-500 font-normal ml-2">${new Date(r.created_at).toLocaleString()}</span></div>
+          <div class="text-sm text-slate-600 mt-1 mb-2">Email: <b>${r.email || 'N/A'}</b> | Username: <b>${r.username}</b></div>
+          <div class="grid grid-cols-3 gap-2 text-xs text-slate-600 mb-2">
+            <div>Target DR: <b>${r.dr||'Any'}</b></div>
+            <div>Target Traffic: <b>${r.traffic||'Any'}</b></div>
+            <div>Target Budget: <b>${r.budget ? '$'+r.budget : 'Any'}</b></div>
+          </div>
+          <div class="text-sm bg-white p-2 border rounded text-slate-700">${r.notes || '<i>No additional notes</i>'}</div>
+        </div>
+      `).join('') + '</div>';
+    }
+  } catch(e) { $('#requestsView').innerHTML = '<p class="text-red-600">Failed to load</p>'; }
+}
+window.deleteRequest = async (id) => {
+  if (!confirm('Delete this request?')) return;
+  try {
+    await api('/api/requests/'+id, { method: 'DELETE' });
+    toast('Deleted', 'success');
+    loadRequestsTab();
+  } catch(e) { toast(e.message, 'error'); }
+};
 
 </script>
 </body>

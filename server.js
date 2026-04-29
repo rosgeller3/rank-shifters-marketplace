@@ -363,8 +363,14 @@ app.get('/api/analytics', auth(true), adminOnly, async (req,res) => {
   const totalInq = recent.reduce((s,r) => s + r.inquiries, 0);
   const conversionRate = totalViews ? Math.round((totalInq / totalViews) * 1000) / 10 : 0;
   
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const abandonedCartsRaw = await db.collection('abandoned_carts')
+    .find({ updated_at: { $lt: oneHourAgo }, "items.0": { $exists: true } })
+    .sort({ updated_at: -1 }).limit(20).toArray();
+  const abandonedCarts = abandonedCartsRaw.map(c => cleanOutput(c));
+  
   res.json({
-    days, series, topViewed, topInquired,
+    days, series, topViewed, topInquired, abandonedCarts,
     summary: {
       totalUsers: await db.collection('users').countDocuments({ role: { $ne: 'admin' } }),
       totalWebsites: await db.collection('websites').countDocuments({ deleted_at: null }),
@@ -381,6 +387,10 @@ app.post('/api/inquiries', auth(false), async (req,res) => {
   const inq = { id: await nextId('inquiry'), username: req.user?.username || 'guest', items, total: Number(total)||0, created_at: new Date().toISOString() };
   await db.collection('inquiries').insertOne(inq);
   await bumpDaily('inquiries');
+  
+  const session_id = req.headers['x-session-id'];
+  if (session_id) await db.collection('abandoned_carts').deleteOne({ session_id });
+  
   res.json({ ok:true, id: inq.id });
 });
 
@@ -392,6 +402,55 @@ app.get('/api/inquiries', auth(true), adminOnly, async (req,res) => {
 app.delete('/api/inquiries/:id', auth(true), adminOnly, async (req,res) => {
   const id = Number(req.params.id);
   await db.collection('inquiries').deleteOne({ id });
+  res.json({ ok:true });
+});
+
+// ----- Custom Requests -----
+app.post('/api/requests', auth(false), async (req,res) => {
+  const { email, niche, dr, traffic, budget, notes } = req.body || {};
+  if (!niche) return res.status(400).json({error:'Niche is required'});
+  const request = {
+    id: await nextId('request'),
+    username: req.user?.username || 'guest',
+    email: email || req.user?.email || '',
+    niche, dr, traffic, budget, notes,
+    created_at: new Date().toISOString()
+  };
+  await db.collection('requests').insertOne(request);
+  res.json({ ok:true, id: request.id });
+});
+
+app.get('/api/requests', auth(true), adminOnly, async (req,res) => {
+  const list = await db.collection('requests').find().sort({ id: -1 }).toArray();
+  res.json(cleanArray(list));
+});
+
+app.delete('/api/requests/:id', auth(true), adminOnly, async (req,res) => {
+  const id = Number(req.params.id);
+  await db.collection('requests').deleteOne({ id });
+  res.json({ ok:true });
+});
+
+// ----- Cart Sync -----
+app.post('/api/cart/sync', auth(false), async (req,res) => {
+  const { items } = req.body || {};
+  const session_id = req.headers['x-session-id'];
+  if (!session_id) return res.json({ ok:true });
+  
+  if (!Array.isArray(items) || items.length === 0) {
+    await db.collection('abandoned_carts').deleteOne({ session_id });
+  } else {
+    await db.collection('abandoned_carts').updateOne(
+      { session_id },
+      { $set: { 
+          session_id, 
+          username: req.user?.username || 'guest',
+          items, 
+          updated_at: new Date().toISOString() 
+      } },
+      { upsert: true }
+    );
+  }
   res.json({ ok:true });
 });
 
